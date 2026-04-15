@@ -1,0 +1,192 @@
+# Provider Tools
+
+Complete provider coordination system with assignment engine, patient dashboard, crisis alerts, and session prep.
+
+## Provider Portal
+
+### Dashboard
+- **Patient Roster** - All active patients with last-activity timestamp, current course, alert flags
+- **Crisis Alerts** - Real-time unresolved distress flags (crisis | mild)
+- **Inactivity Alerts** - 7+ days no engagement
+- **Assessment Feed** - Recent PHQ-9/GAD-7 completions with score trends
+
+### Patient Management
+- **Add/Remove Patients** - Manage active patient list
+- **Display Names** - Provider nicknames for patients (no PII)
+- **Private Notes** - Provider-only notes per patient
+- **Status Tracking** - active | discharged
+- **Unique Constraint** - One provider cannot have duplicate patient links
+
+## Course Assignment Engine
+
+### Assignment Workflow
+1. Select patient from roster
+2. Choose course/module/lesson
+3. Set due date (optional)
+4. Add personal note to patient
+5. Mark required/optional
+6. Patient receives email + in-app notification
+
+### Features
+- **Real-time Completion Tracking** - not started | in progress | completed
+- **Assignment Appears in "My Care Plan"** - Patient sees on next login
+- **Email Notification** - Resend email with direct link + provider note
+- **Unassignment** - DELETE endpoint to remove assignment
+- **Stored in**: `patientAssignment` table
+
+### Assignment Types
+- Full course assignment
+- Single lesson assignment
+- Module assignment (group of lessons)
+- Assessment assignment
+
+## Session Prep Brief
+
+### Auto-Generated Summary
+One-page summary of patient activity since last review:
+- **Assessment Deltas** - PHQ-9/GAD-7 score changes vs. baseline
+- **Lessons Completed** - List with completion dates
+- **Distress Events** - Any crisis/mild flags with context
+- **Mood Trends** - Latest mood check-in data
+- **Time Spent** - Aggregate learning time
+- **Shared Reflections** - Patient-shared journal entries
+
+### Generation
+- **Endpoint**: `/api/provider/session-prep/[patientId]/route.ts`
+- **Trigger**: Provider clicks "Session Prep" in dashboard
+- **Format**: Printable PDF or on-screen view
+
+## Provider Verification & Onboarding
+
+### Verification Workflow
+**Multi-Status Process**:
+1. **Pending** - Application submitted
+2. **Manual Review** - Admin review required
+3. **Verified** - Approved, full access granted
+4. **Rejected** - Denied with reason
+
+### NPI Verification
+- **Automatic**: NPPES API lookup by National Provider Identifier
+- **Validation**: Checks license status, provider type, credentials
+- **Optional**: Can verify without NPI using state license alone
+
+### Verification Methods
+- `npi_auto` - Automatic NPI validation via NPPES
+- `admin_manual` - Manual admin approval with notes
+- `practice_code` - Practice-based verification
+
+### Profile Setup
+- **License Info**: State license type (LPC, LMFT, LCSW, MD, DO, NP)
+- **Specialties**: List of treatment specialties
+- **Modalities**: CBT, DBT, EMDR, etc.
+- **Languages**: Languages spoken
+- **Accepting New Patients**: Toggle
+- **Practice Association**: Linked to practice entity (multi-tenant support)
+
+### Routes
+- `/provider-signup` - Provider registration
+- `/provider-pending` - Waiting for verification
+- `/provider-rejected` - Rejection notice with reason
+- `/provider/dashboard` - Verified provider home
+
+## Provider Alerts
+
+### Alert Types
+**Crisis Alerts** (Priority 0):
+- Email + in-app notification when patient triggers crisis-level distress
+- **Includes**: Patient display name, distress level, confidence score, context (journal/assessment/forum), timestamp
+- **Never Suppressed**: Always delivered immediately
+
+**Inactivity Alerts**:
+- 7+ days no engagement
+- Gentle nudge to check in with patient
+
+**Assessment Score Increase**:
+- PHQ-9/GAD-7 score increases ≥5 points (configurable)
+- Indicates potential deterioration
+
+### Alert Management
+- **View**: `/provider/alerts` route
+- **Resolve**: Mark alert as addressed with notes
+- **Resolution Tracking**: For compliance and outcomes measurement
+- **Email + In-App**: Dual notification for critical alerts
+
+## RAG Clinical Knowledge Search
+
+### Purpose
+Semantic search over all course content to help providers understand curriculum depth
+
+### Query Examples
+- "What does platform cover for panic disorder?"
+- "Which courses teach exposure therapy?"
+- "What assessments are available?"
+
+### Response Format
+Synthesized answer with source citations (course names, lesson titles)
+
+### Access
+- **Endpoint**: `/provider/resources`
+- **Restricted**: Verified providers only
+- **Technology**: OpenAI embeddings + cosine similarity
+
+## Patient Invite System
+
+### Invite Code Generation
+1. Provider generates invite code (QR or alphanumeric)
+2. Code stored in `providerInvite` table
+3. Code expires after 30 days or first use (configurable)
+
+### Patient Linking Workflow
+1. Patient enters code during signup
+2. System links patient to provider
+3. Provider assigns first course + welcome note
+4. Patient receives email with direct link
+
+### Features
+- **Time-Limited**: Codes expire for security
+- **Single-Use** (default) or multi-use (configurable)
+- **Tracking**: Provider sees which codes were used, when
+
+## Mood & Progress Tracking
+
+### Provider Visibility
+- **Latest Mood Entry**: See patient's most recent check-in (mood, anxiety, sleep, energy)
+- **Mood Trends**: Visual charts of mood patterns over time
+- **Progress Overview**: Courses in progress, completion percentage
+- **Time Spent**: Aggregate learning time per course
+
+### Assessment Visibility
+- **Score History**: All PHQ-9/GAD-7 completions with dates
+- **Trend Charts**: Visual representation of score changes
+- **Severity Flags**: Automatic highlighting of severe scores
+
+## Reflection Sharing
+
+### Optional Patient Sharing
+- Patients can mark journal entries as "shared with provider"
+- Provider sees shared reflections in patient detail view
+- **Privacy**: Only shared entries visible, not all journals
+- Used in session prep briefs
+
+## Admin Provider Portal
+
+### Admin Capabilities
+- **Provider Verification Queue**: View all pending applications
+- **Manual Approval/Rejection**: Override automatic NPI verification
+- **Verification Notes**: Add admin notes to decisions
+- **NPI Lookup Results**: View NPPES API response data
+- **Track Verification Method**: See how provider was verified
+
+### Route
+- `/admin/providers` - Provider verification queue
+
+## Group Cohort Management (Future)
+
+### Planned Features
+- Create cohorts for group therapy programs
+- Shared curriculum timelines
+- Facilitation guides for live sessions
+- Cohort-level progress tracking
+- Group discussion boards
+
+**Status**: Designed, not yet built

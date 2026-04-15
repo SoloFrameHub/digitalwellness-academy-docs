@@ -1,13 +1,9 @@
 {
   "overview": "Overview",
   "clinical": "Clinical Features",
-  "optimization": "Optimization Features",
-  "provider-tools": "Provider Tools",
   "ai-ml": "AI & Machine Learning",
-  "wellness-intelligence": "Wellness Intelligence",
-  "gamification": "Gamification & Engagement",
+  "provider-tools": "Provider Tools",
   "community": "Community & Engagement",
   "safety": "Safety & Crisis Response",
-  "personalization": "Personalization Engine",
   "data-infrastructure": "Data & Infrastructure"
 }

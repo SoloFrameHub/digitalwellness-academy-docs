@@ -1,0 +1,158 @@
+# AI & Machine Learning
+
+Complete AI/ML infrastructure including custom distress classifier, wellness coach, RAG search, and voice AI.
+
+## Distress Classifier (Production ML)
+
+### Architecture
+- **Model**: Custom fine-tuned DistilBERT (255MB weights)
+- **Service**: Python FastAPI (separate Docker container)
+- **Inference**: CPU-based, 50-200ms latency
+- **Deployment**: Internal dokploy-network at http://distress-classifier:8001
+
+### Classification System
+**Input Streams**:
+- Journal entries
+- Assessment free-text responses  
+- Forum posts
+- Reflection prompts
+- Checkins
+
+**Output Levels**:
+- **None** (< 60% confidence) - No intervention
+- **Mild** (60-85% confidence) - Gentle check-in prompt
+- **Crisis** (≥ 85% confidence) - Modal + provider alert
+
+**Performance**:
+- Sensitivity: >95% (catches true crises)
+- Precision: >85% (minimizes false alarms)
+- False positive rate: ~3% (vs 15% for keyword systems)
+
+### HIPAA Zero-Knowledge Architecture
+- Text analyzed and **discarded immediately**
+- **Never stored, never logged**
+- Only classification metadata persisted (level, confidence, timestamp, context)
+- No PHI in audit logs
+- Encrypted in transit (TLS 1.2+)
+- BAA-ready infrastructure
+
+### Provider Integration
+When crisis detected:
+1. Patient sees crisis modal (988 hotline, resources)
+2. Provider receives alert (email + in-app notification)
+3. Alert includes: patient display name, distress level, confidence score, context, timestamp
+4. Provider can view in dashboard and mark resolved
+
+### Safety Redundancy
+- PHQ-9 Item 9 gate (independent of ML classifier)
+- Forum AI moderation
+- Keyword gate for optimization school (cost-effective backup)
+
+## AI Wellness Coach
+
+### Capabilities
+- **Streaming chat interface** - Real-time response generation
+- **Crisis detection** - Embedded in coach logic, triggers resources
+- **Context-aware** - Injects current page, course, lesson context
+- **Rate-limited** - Per-user rate limiting (AI_RATE_LIMIT)
+- **Fallback** - Uses OpenAI if no specific context available
+
+### Topics Supported
+- Anxiety support
+- Breathing exercises
+- Crisis intervention  
+- General wellness
+- Topic tracking per session
+
+### Session Storage
+- Full conversation history (`coachSession` table)
+- Topic classification (e.g., 'anxiety', 'breathing-exercise', 'crisis-support')
+- Crisis detection flag on session
+- Used for continuous learning
+
+### Provider Visibility
+Providers can see coach context in RAG system for session prep
+
+## RAG (Retrieval-Augmented Generation)
+
+### Purpose
+Clinical knowledge search for providers - "What does platform cover for panic disorder?"
+
+### Architecture
+- **Embeddings**: OpenAI text-embedding-3-small (1536 dimensions)
+- **Storage**: JSONB float arrays in `contentEmbedding` table
+- **Search**: Cosine similarity in pure JavaScript (no pgvector needed)
+- **Index**: Pre-computed course content chunks with metadata
+
+### Features
+- Filtering by sourceType (course | assessment | clinical)
+- Returns synthesized answers with source citations
+- Accessible only to verified providers
+- Helps providers understand curriculum depth
+
+### Query Examples
+- "What does the platform teach about exposure therapy?"
+- "Which courses cover sleep hygiene?"
+- "What assessments are available for anxiety?"
+
+## Voice AI Integration
+
+### Text-to-Speech (TTS)
+- **Endpoint**: `/api/ai/voice/tts`
+- **Purpose**: Converts lesson content to audio
+- **Accessibility**: For motor impairments, dyslexia
+- **Rate-limited**: Authenticated only
+
+### Speech-to-Text (STT)
+- **Endpoint**: `/api/ai/voice/stt`
+- **Purpose**: Transcribes user voice input for journals/assessments
+- **Accessibility**: For typing difficulties
+- **Rate-limited**: Authenticated only
+
+## AI Forum Moderation
+
+### Content Moderation
+- AI-powered before publishing
+- Flags potentially harmful content:
+  - Pro-ana / pro-mia content
+  - Self-harm encouragement
+  - Violence
+  - Spam
+- Human review queue for flagged posts
+- Integrated with distress classifier (all forum posts analyzed)
+
+### Topic Classification
+Discussions auto-classified into:
+- Anxiety
+- Depression
+- Relationships
+- Medication
+- Coping strategies
+- Crisis
+- General wellness
+- Optimization
+
+## Maia Unified AI Client
+
+### Capabilities
+1. **Distress Classification** - Multi-context (journal, assessment, forum, checkin)
+2. **Forum Topic Classification** - Auto-tag discussions
+3. **Content Quality Scoring** - Rate lesson sections:
+   - clinically-appropriate
+   - needs-revision
+   - potentially-harmful
+   - overly-clinical
+   - missing-validation
+4. **Content Atomization Tagging** - Tag for marketing extraction:
+   - standalone-blog-excerpt
+   - email-teaser
+   - social-snippet
+   - needs-full-context
+   - not-extractable
+5. **Moderation Audit Log** - Track all decisions with reasoning
+
+### Database Schema
+- `forumTopicClassification` table
+- `contentQualityScore` table
+- `contentAtomizationTag` table  
+- `moderationLog` table
