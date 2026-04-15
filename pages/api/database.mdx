@@ -1,0 +1,478 @@
+# Database Schema
+
+PostgreSQL database with Drizzle ORM. Complete table reference with relationships, indexes, and constraints.
+
+## Core Authentication Tables
+
+### `user`
+Lucia auth users table.
+
+**Columns:**
+- `id` (text, PK) - UUID v4
+- `email` (text, unique, not null)
+- `hashedPassword` (text, not null) - Argon2 hash
+- `role` (text, not null) - 'user' | 'provider' | 'admin'
+- `createdAt` (timestamp, not null, default: now())
+- `updatedAt` (timestamp, not null, default: now())
+
+**Indexes:**
+- PRIMARY KEY (id)
+- UNIQUE (email)
+
+**Notes:**
+- Argon2 config: 19456 memory cost, 2 iterations
+- Password min length: 12 characters
+- Role defaults to 'user' on signup
+
+### `session`
+Lucia session table.
+
+**Columns:**
+- `id` (text, PK)
+- `userId` (text, FK → user.id, not null)
+- `expiresAt` (timestamp, not null)
+
+**Indexes:**
+- PRIMARY KEY (id)
+- INDEX (userId)
+
+**Notes:**
+- Session duration: 24 hours (sliding window)
+- Auto-deleted on expiry via Lucia
+
+### `profile`
+User wellness profile (JSONB storage).
+
+**Columns:**
+- `userId` (text, PK, FK → user.id)
+- `data` (jsonb, not null) - Full WellnessProfile object
+- `updatedAt` (timestamp, not null, default: now())
+
+**Indexes:**
+- PRIMARY KEY (userId)
+- GIN INDEX on (data jsonb_path_ops) - Fast JSONB queries
+
+**JSONB Structure:**
+```typescript
+{
+  questionnaire: {
+    primarySymptoms: SymptomSelection[]
+    goals: string[]
+    completedAt: string
+  }
+  assessment: {
+    overallWellnessScore: number
+    anxietyScore: number
+    moodScore: number
+    sleepScore: number
+    stressScore: number
+    nutritionScore: number
+    anxietyAssessment: { score, severity, responses }
+    depressionScreening: { score, severity, responses }
+    crisisScreening: { riskLevel, responses }
+    recommendedCourses: string[]
+    recommendedStartCourse: string
+  }
+  progress: {
+    completedCourses: string[]
+    currentCourse: string
+    completedLessons: { [courseId]: { [lessonId]: true } }
+    xp: number
+    badges: string[]
+  }
+  thoughtRecords: { [courseId]: { [lessonId]: ThoughtRecord[] } }
+  trackingLogs: { [courseId]: { [lessonId]: TrackingEntry[] } }
+  onboardingCompleted: boolean
+  onboardingCompletedAt: string
+}
+```
+
+## Wellness Tracking Tables
+
+### `moodEntry`
+Daily mood and wellness check-ins.
+
+**Columns:**
+- `id` (serial, PK)
+- `userId` (text, FK → user.id, not null)
+- `date` (date, not null)
+- `moodRating` (integer, 1-10)
+- `anxietyLevel` (integer, 1-10)
+- `sleepQuality` (integer, 1-10)
+- `energyLevel` (integer, 1-10)
+- `notes` (text, nullable)
+- `copingTechniquesUsed` (jsonb, nullable) - Array of strings
+- `triggers` (jsonb, nullable) - Array of strings
+- `createdAt` (timestamp, not null, default: now())
+
+**Indexes:**
+- PRIMARY KEY (id)
+- INDEX (userId, date DESC) - Fast user mood history queries
+- UNIQUE (userId, date) - One entry per user per day
+
+**Notes:**
+- Users can update entry for current day
+- Used for trend visualization in dashboard
+
+### `coachSession`
+AI wellness coach conversation logs.
+
+**Columns:**
+- `id` (serial, PK)
+- `userId` (text, FK → user.id, not null)
+- `transcript` (jsonb, not null) - Array of {role: 'user'|'assistant', content: string}
+- `topic` (text, nullable) - 'anxiety' | 'breathing-exercise' | 'coping-strategies' | etc.
+- `crisisDetected` (integer, default: 0) - Boolean flag (0 or 1)
+- `createdAt` (timestamp, not null, default: now())
+
+**Indexes:**
+- PRIMARY KEY (id)
+- INDEX (userId, createdAt DESC)
+
+**Notes:**
+- Sessions auto-expire after 30 days (configurable)
+- Crisis detection runs on every user message
+
+### `lessonFeedback`
+User feedback on lesson quality.
+
+**Columns:**
+- `id` (serial, PK)
+- `userId` (text, FK → user.id, not null)
+- `courseId` (text, not null)
+- `lessonId` (text, not null)
+- `rating` (integer, 1-5, not null)
+- `category` (text, not null) - 'content' | 'technical' | 'suggestion' | 'other'
+- `message` (text, nullable)
+- `createdAt` (timestamp, not null, default: now())
+
+**Indexes:**
+- PRIMARY KEY (id)
+- INDEX (courseId, lessonId) - Aggregate feedback per lesson
+
+**Notes:**
+- Used for content quality improvement
+- Analyzed for common pain points
+
+## Safety & Crisis Tables
+
+### `distressEvent`
+HIPAA-safe audit log for distress classifications.
+
+**Columns:**
+- `id` (serial, PK)
+- `userId` (text, FK → user.id, nullable) - Null for anonymous crisis screening
+- `level` (text, not null) - 'none' | 'mild' | 'crisis'
+- `confidence` (real, 0.0-1.0, not null)
+- `context` (text, not null) - 'journal' | 'assessment' | 'forum' | 'checkin' | 'coaching'
+- `courseId` (text, nullable)
+- `lessonId` (text, nullable)
+- `providerAlerted` (boolean, default: false)
+- `resolvedAt` (timestamp, nullable)
+- `resolvedBy` (text, FK → user.id, nullable) - Provider who resolved
+- `createdAt` (timestamp, not null, default: now())
+
+**Indexes:**
+- PRIMARY KEY (id)
+- INDEX (userId, createdAt DESC)
+- INDEX (providerAlerted, resolvedAt) - Fast unresolved alert queries
+
+**CRITICAL SECURITY NOTE:**
+- **NO USER TEXT STORED** - Only classification metadata
+- Input text NEVER logged or persisted
+- HIPAA-compliant audit trail
+- Used for provider alerts and analytics
+
+### `aiClassificationEvent`
+Audit log for all Maia AI classifications.
+
+**Columns:**
+- `id` (serial, PK)
+- `classifier` (text, not null) - 'distress' | 'forum-topic' | 'content-quality' | 'content-atomization'
+- `userId` (text, FK → user.id, nullable)
+- `sourceType` (text, not null) - 'lesson' | 'forum' | 'journal' | 'assessment'
+- `sourceId` (text, nullable) - Discussion ID, lesson ID, etc.
+- `primaryLabel` (text, not null) - Top classification result
+- `confidence` (real, 0.0-1.0, not null)
+- `result` (jsonb, not null) - Full classifier response
+- `processingMs` (integer, nullable) - Inference time
+- `createdAt` (timestamp, not null, default: now())
+
+**Indexes:**
+- PRIMARY KEY (id)
+- INDEX (classifier, createdAt DESC)
+- INDEX (userId, classifier)
+
+**Notes:**
+- Used for model performance monitoring
+- Tracks false positive/negative rates
+- Analytics for AI effectiveness
+
+## Provider Management Tables
+
+### `providerProfile`
+Provider verification and credentials.
+
+**Columns:**
+- `userId` (text, PK, FK → user.id)
+- `displayName` (text, not null)
+- `credentials` (text, nullable) - "PhD", "LCSW", "MD", etc.
+- `specialty` (text, nullable) - "Anxiety Disorders", "Trauma", etc.
+- `licenseNumber` (text, nullable)
+- `npiNumber` (text, nullable) - National Provider Identifier
+- `verificationStatus` (text, not null, default: 'pending') - 'pending' | 'verified' | 'rejected' | 'manual_review'
+- `verificationMethod` (text, nullable) - 'npi_auto' | 'admin_manual' | 'practice_code'
+- `npiData` (jsonb, nullable) - Raw NPPES API response
+- `verifiedAt` (timestamp, nullable)
+- `verifiedBy` (text, FK → user.id, nullable) - Admin who verified
+- `createdAt` (timestamp, not null, default: now())
+
+**Indexes:**
+- PRIMARY KEY (userId)
+- INDEX (verificationStatus) - Fast pending queue queries
+- INDEX (npiNumber) - NPI lookup
+
+**Notes:**
+- NPI auto-verification via NPPES API
+- Manual admin verification fallback
+- Verification required before provider can link patients
+
+### `providerPatient`
+Patient-provider relationships.
+
+**Columns:**
+- `id` (serial, PK)
+- `providerId` (text, FK → user.id, not null)
+- `patientId` (text, FK → user.id, not null)
+- `displayName` (text, nullable) - Provider-set nickname for patient
+- `notes` (text, nullable) - Private provider notes (NOT visible to patient)
+- `status` (text, not null, default: 'active') - 'active' | 'discharged'
+- `createdAt` (timestamp, not null, default: now())
+
+**Indexes:**
+- PRIMARY KEY (id)
+- UNIQUE (providerId, patientId) - One relationship per pair
+- INDEX (providerId, status) - Fast active patient list
+- INDEX (patientId) - Find patient's provider
+
+**Notes:**
+- Established via invite code or manual link
+- Provider can see patient's mood, assessments, progress
+- One patient can have one provider (not many-to-many currently)
+
+### `patientAssignment`
+Provider-assigned courses and lessons.
+
+**Columns:**
+- `id` (serial, PK)
+- `providerId` (text, FK → user.id, not null)
+- `patientId` (text, FK → user.id, not null)
+- `courseId` (text, not null)
+- `lessonId` (text, nullable) - Null = entire course assigned
+- `dueDate` (timestamp, nullable)
+- `completedAt` (timestamp, nullable)
+- `note` (text, nullable) - Assignment instructions from provider
+- `createdAt` (timestamp, not null, default: now())
+
+**Indexes:**
+- PRIMARY KEY (id)
+- INDEX (patientId, completedAt) - Incomplete assignments first
+
+**Notes:**
+- Visible to patient in "My Path" section
+- Provider receives notification when completed
+
+### `providerInvite`
+One-time invite codes for patient linking.
+
+**Columns:**
+- `code` (text, PK) - UUID or short code
+- `providerId` (text, FK → user.id, not null)
+- `usedBy` (text, FK → user.id, nullable)
+- `usedAt` (timestamp, nullable)
+- `expiresAt` (timestamp, not null)
+- `createdAt` (timestamp, not null, default: now())
+
+**Indexes:**
+- PRIMARY KEY (code)
+- INDEX (providerId, createdAt DESC)
+
+**Notes:**
+- Code expires after 30 days (configurable)
+- One-time use only
+- Patient enters code to link with provider
+
+## Community Tables
+
+### `forumBookmark`
+User-saved forum discussions.
+
+**Columns:**
+- `userId` (text, FK → user.id, not null)
+- `discussionId` (text, not null) - Flarum discussion ID
+- `createdAt` (timestamp, not null, default: now())
+
+**Indexes:**
+- PRIMARY KEY (userId, discussionId)
+
+**Notes:**
+- Discussions stored in Flarum, bookmarks in local DB
+- Used for "Saved Discussions" page
+
+### `forumTopicClassification`
+AI-classified forum discussion topics (denormalized for performance).
+
+**Columns:**
+- `discussionId` (text, PK) - Flarum discussion ID
+- `topic` (text, not null) - 'anxiety' | 'depression' | 'relationships' | 'medication' | 'coping-strategies' | 'crisis' | 'general-wellness' | 'optimization'
+- `topicConfidence` (real, 0.0-1.0, not null)
+- `routing` (text, not null) - 'needs-provider' | 'community-handles' | 'informational'
+- `needsProvider` (boolean, default: false) - Requires provider review
+- `providerReviewed` (boolean, default: false) - Provider has reviewed
+- `createdAt` (timestamp, not null, default: now())
+
+**Indexes:**
+- PRIMARY KEY (discussionId)
+- INDEX (topic) - Filter discussions by topic
+- INDEX (needsProvider, providerReviewed) - Provider review queue
+
+**Notes:**
+- Populated by Maia forum-topic classifier (async)
+- Used for smart forum filtering and provider routing
+
+### `moderationLog`
+AI content moderation audit log.
+
+**Columns:**
+- `id` (serial, PK)
+- `userId` (text, FK → user.id, nullable)
+- `contentType` (text, not null) - 'discussion' | 'post' | 'journal' | 'chat'
+- `contentSnippet` (text, nullable) - First 200 chars (for audit, not full content)
+- `riskLevel` (text, not null) - 'safe' | 'warning' | 'blocked'
+- `categories` (jsonb, nullable) - Array of flagged categories
+- `action` (text, not null) - 'allowed' | 'blocked' | 'flagged'
+- `reasoning` (text, nullable) - AI explanation
+- `createdAt` (timestamp, not null, default: now())
+
+**Indexes:**
+- PRIMARY KEY (id)
+- INDEX (riskLevel, action)
+- INDEX (userId)
+
+**Notes:**
+- All forum posts scanned before publication
+- Harmful content blocked automatically
+- Ambiguous content flagged for manual review
+
+## Content Management Tables
+
+### `contentQualityScore`
+AI validation of therapeutic content quality.
+
+**Columns:**
+- `id` (serial, PK)
+- `courseId` (text, not null)
+- `lessonId` (text, not null)
+- `sectionIndex` (integer, not null) - Paragraph/section number
+- `quality` (text, not null) - 'clinically-appropriate' | 'needs-revision' | 'potentially-harmful' | 'overly-clinical' | 'missing-validation'
+- `confidence` (real, 0.0-1.0, not null)
+- `publishReady` (boolean, default: true) - False if needs-revision or potentially-harmful
+- `allLabels` (jsonb, nullable) - All classification scores
+- `createdAt` (timestamp, not null, default: now())
+
+**Indexes:**
+- PRIMARY KEY (id)
+- UNIQUE (courseId, lessonId, sectionIndex)
+- INDEX (quality, publishReady) - Find content needing review
+
+**Notes:**
+- Populated by Maia content-quality classifier
+- Used for content review pipeline
+- Flags potentially harmful content before publication
+
+### `contentAtomizationTag`
+Marketing content extraction from lessons.
+
+**Columns:**
+- `id` (serial, PK)
+- `courseId` (text, not null)
+- `lessonId` (text, not null)
+- `sectionIndex` (integer, not null)
+- `sectionText` (text, not null) - Lesson excerpt (non-PHI educational content only)
+- `tag` (text, not null) - 'standalone-blog-excerpt' | 'email-teaser' | 'social-snippet' | 'needs-full-context' | 'not-extractable'
+- `extractable` (boolean, not null) - True if standalone-blog, email-teaser, or social-snippet
+- `createdAt` (timestamp, not null, default: now())
+
+**Indexes:**
+- PRIMARY KEY (id)
+- INDEX (courseId, lessonId)
+- INDEX (tag, extractable) - Filter extractable content for marketing
+
+**Notes:**
+- Populated by Maia content-atomization classifier
+- Used to auto-generate blog posts, emails, social media
+- Only educational content (no user data, no personalized examples)
+
+### `contentEmbedding`
+Vector embeddings for RAG (provider resource search).
+
+**Columns:**
+- `id` (serial, PK)
+- `sourceType` (text, not null) - 'lesson' | 'assessment' | 'guideline'
+- `sourceId` (text, not null) - courseId:lessonId or assessment name
+- `chunkIndex` (integer, not null) - Paragraph number
+- `title` (text, not null) - Lesson/section title
+- `body` (text, not null) - Text chunk (max 1000 tokens)
+- `embedding` (jsonb, not null) - Float array (OpenAI text-embedding-3-small, 1536 dims)
+- `metadata` (jsonb, nullable) - Additional context (framework, research grade, etc.)
+- `createdAt` (timestamp, not null, default: now())
+
+**Indexes:**
+- PRIMARY KEY (id)
+- INDEX (sourceType, sourceId)
+
+**Querying:**
+- Cosine similarity search via custom SQL function
+- Returns top K results by relevance
+- Used for provider session prep and resource search
+
+## Relationships Diagram
+
+```
+user (1) ←→ (1) profile
+user (1) ←→ (many) session
+user (1) ←→ (many) moodEntry
+user (1) ←→ (many) coachSession
+user (1) ←→ (many) lessonFeedback
+user (1) ←→ (many) distressEvent
+user (1) ←→ (many) aiClassificationEvent
+
+user (1) ←→ (1) providerProfile
+user (provider) (1) ←→ (many) providerPatient
+user (patient) (1) ←→ (1) providerPatient
+providerPatient (1) ←→ (many) patientAssignment
+
+user (1) ←→ (many) forumBookmark
+user (1) ←→ (many) moderationLog
+```
+
+## Constraints
+
+### Foreign Key Constraints
+All FK columns cascade on delete:
+- session.userId → user.id (DELETE CASCADE)
+- profile.userId → user.id (DELETE CASCADE)
+- moodEntry.userId → user.id (DELETE CASCADE)
+- providerPatient.providerId → user.id (DELETE CASCADE)
+- providerPatient.patientId → user.id (DELETE CASCADE)
+
+### Unique Constraints
+- user.email (UNIQUE)
+- providerPatient (providerId, patientId) (UNIQUE)
+- moodEntry (userId, date) (UNIQUE)
+- contentQualityScore (courseId, lessonId, sectionIndex) (UNIQUE)
+
+### Check Constraints
+- moodEntry.moodRating: CHECK (moodRating >= 1 AND moodRating <= 10)
+- lessonFeedback.rating: CHECK (rating >= 1 AND rating <= 5)
+- distressEvent.confidence: CHECK (confidence >= 0.0 AND confidence <= 1.0)

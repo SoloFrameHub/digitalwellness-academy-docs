@@ -1,0 +1,776 @@
+# API Reference
+
+Complete reference of all 53 API endpoints.
+
+## Authentication `/api/auth/`
+
+### POST `/api/auth/signin`
+Login with email and password.
+
+**Request:**
+```json
+{
+  "email": "user@example.com",
+  "password": "securepassword123"
+}
+```
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "user": {
+    "id": "user_123",
+    "email": "user@example.com",
+    "role": "user"
+  }
+}
+```
+
+**Errors:**
+- 400: Invalid email or password
+- 429: Too many attempts (rate limited)
+
+**Notes:**
+- Creates Lucia session cookie
+- Rate limited: 10 attempts per 15 minutes
+- Argon2 password verification
+
+### POST `/api/auth/signup`
+Register new user account.
+
+**Request:**
+```json
+{
+  "email": "newuser@example.com",
+  "password": "securepassword123"
+}
+```
+
+**Response (201):**
+```json
+{
+  "success": true,
+  "userId": "user_456"
+}
+```
+
+**Errors:**
+- 400: Email already exists, invalid email format, password too short (min 12 chars)
+
+**Notes:**
+- Auto-creates session and logs user in
+- Redirects to /onboarding/welcome
+
+### POST `/api/auth/signout`
+Logout current user.
+
+**Response (200):**
+```json
+{
+  "success": true
+}
+```
+
+**Notes:**
+- Invalidates Lucia session
+- Clears session cookie
+
+### GET `/api/auth/session`
+Validate current session.
+
+**Response (200):**
+```json
+{
+  "user": {
+    "id": "user_123",
+    "email": "user@example.com",
+    "role": "user"
+  },
+  "session": {
+    "id": "session_abc",
+    "expiresAt": "2026-04-16T..."
+  }
+}
+```
+
+**Errors:**
+- 401: No valid session
+
+## Onboarding `/api/onboarding/`
+
+### POST `/api/onboarding/symptoms`
+Save symptom selections.
+
+**Request:**
+```json
+{
+  "symptoms": [
+    {
+      "category": "anxiety",
+      "severity": "moderate",
+      "duration": "1-3-months",
+      "isPrimary": true
+    },
+    {
+      "category": "sleep",
+      "severity": "mild",
+      "duration": "2-4-weeks",
+      "isPrimary": false
+    }
+  ]
+}
+```
+
+**Response (200):**
+```json
+{
+  "success": true
+}
+```
+
+### POST `/api/onboarding/assessment`
+Submit onboarding assessment (GAD-7 + PHQ-9 + crisis screening).
+
+**Request:**
+```json
+{
+  "gad7": [0, 1, 2, 1, 0, 1, 2],
+  "phq9": [1, 2, 1, 0, 2, 1, 0, 1, 0],
+  "crisisScreening": {
+    "hasThoughtsOfHarm": false,
+    "hasPlan": false,
+    "hasAttemptHistory": false
+  }
+}
+```
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "scores": {
+    "anxietyScore": 7,
+    "anxietySeverity": "mild",
+    "depressionScore": 8,
+    "depressionSeverity": "mild",
+    "crisisRisk": "low"
+  },
+  "crisis": false
+}
+```
+
+**Crisis Response (200 with crisis=true):**
+```json
+{
+  "success": true,
+  "crisis": true,
+  "crisisResources": {
+    "hotline988": "988",
+    "crisisTextLine": "Text HOME to 741741"
+  }
+}
+```
+
+**Notes:**
+- PHQ-9 Item 9 (suicidal ideation): If >= 2, triggers crisis modal
+- Scores saved to profile.assessment
+- Provider alerted if user has linked provider
+
+### POST `/api/onboarding/complete`
+Mark onboarding as complete, compute wellness scores, generate course recommendations.
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "wellnessScores": {
+    "anxiety": 45,
+    "mood": 50,
+    "sleep": 60,
+    "stress": 40,
+    "nutrition": 70
+  },
+  "recommendedCourses": [
+    "generalized-anxiety-disorder",
+    "panic-disorder",
+    "sleep-insomnia"
+  ],
+  "currentCourse": "generalized-anxiety-disorder"
+}
+```
+
+**Notes:**
+- Runs recommendation engine
+- Sets currentCourse to first recommended course
+- Marks onboardingCompleted = true
+
+## Academy/Lessons `/api/academy/`
+
+### POST `/api/academy/complete-lesson`
+Mark lesson as completed.
+
+**Request:**
+```json
+{
+  "courseId": "generalized-anxiety-disorder",
+  "lessonId": "introduction"
+}
+```
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "xpEarned": 10,
+  "totalXp": 150,
+  "courseProgress": 0.15
+}
+```
+
+**Notes:**
+- Saves to profile.progress.completedLessons
+- Awards XP
+- Unlocks next lesson
+
+### GET `/api/academy/assessment/[courseId]/[lessonId]`
+Load assessment configuration.
+
+**Response (200):**
+```json
+{
+  "questions": [
+    {
+      "id": "q1",
+      "text": "Over the last 2 weeks, how often have you felt nervous, anxious, or on edge?",
+      "type": "likert",
+      "scale": ["Not at all", "Several days", "More than half the days", "Nearly every day"],
+      "values": [0, 1, 2, 3]
+    }
+  ],
+  "scoringBands": [
+    { "min": 0, "max": 4, "severity": "minimal" },
+    { "min": 5, "max": 9, "severity": "mild" }
+  ]
+}
+```
+
+### POST `/api/academy/assessment/[courseId]/[lessonId]`
+Submit assessment responses.
+
+**Request:**
+```json
+{
+  "responses": [0, 1, 2, 1, 0, 1, 2],
+  "assessmentType": "gad7"
+}
+```
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "score": 7,
+  "severity": "mild",
+  "previousScore": 10,
+  "delta": -3,
+  "history": [
+    { "date": "2026-04-01", "score": 10 },
+    { "date": "2026-04-15", "score": 7 }
+  ]
+}
+```
+
+**Notes:**
+- Auto-scores based on assessment config
+- Saves to profile.assessment.assessmentHistory
+- Returns trend data for comparison
+
+### POST `/api/academy/quiz/[sectionId]/[courseId]/[lessonId]`
+Submit end-of-lesson quiz.
+
+**Request:**
+```json
+{
+  "answers": ["b", "a", "c", "d", "b"]
+}
+```
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "score": 4,
+  "total": 5,
+  "passed": true,
+  "feedback": [
+    { "questionIndex": 0, "correct": true, "explanation": "..." },
+    { "questionIndex": 1, "correct": false, "correctAnswer": "c", "explanation": "..." }
+  ]
+}
+```
+
+### POST `/api/academy/thought-record/[courseId]/[lessonId]`
+Save thought record (CBT exercise).
+
+**Request:**
+```json
+{
+  "situation": "Meeting with boss",
+  "automaticThought": "I'm going to get fired",
+  "emotion": "anxiety",
+  "intensity": 8,
+  "evidenceFor": "He seemed upset",
+  "evidenceAgainst": "I've received positive feedback recently",
+  "alternativeThought": "He might be stressed about something else",
+  "newIntensity": 4
+}
+```
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "saved": true
+}
+```
+
+**Notes:**
+- Saved to profile JSONB under thoughtRecords.[courseId].[lessonId][]
+- Allows multiple records per lesson
+
+### POST `/api/academy/feedback`
+Submit lesson feedback.
+
+**Request:**
+```json
+{
+  "courseId": "generalized-anxiety-disorder",
+  "lessonId": "introduction",
+  "rating": 5,
+  "category": "content",
+  "message": "Very helpful introduction to GAD"
+}
+```
+
+**Response (201):**
+```json
+{
+  "success": true,
+  "feedbackId": 123
+}
+```
+
+**Notes:**
+- Saved to lessonFeedback table
+- Used for content quality improvement
+
+## Safety `/api/safety/`
+
+### POST `/api/safety/classify`
+Classify text for distress/crisis indicators.
+
+**Request:**
+```json
+{
+  "text": "I feel hopeless and don't see a way out",
+  "context": "journal",
+  "courseId": "depression",
+  "lessonId": "coping"
+}
+```
+
+**Response (200):**
+```json
+{
+  "level": "crisis",
+  "confidence": 0.92,
+  "crisis": true,
+  "flag": true,
+  "resources": {
+    "hotline988": "988",
+    "crisisTextLine": "Text HOME to 741741"
+  }
+}
+```
+
+**Errors:**
+- 500: Classifier service unavailable (returns level: "none" as fail-safe)
+
+**Notes:**
+- 3-second timeout
+- Text NEVER logged or stored
+- Metadata saved to distressEvent table
+- Provider alerted if crisis=true and user has provider
+
+## Provider `/api/provider/`
+
+### GET `/api/provider/alerts`
+Get unresolved distress alerts for provider's patients.
+
+**Response (200):**
+```json
+{
+  "alerts": [
+    {
+      "id": 1,
+      "patientId": "user_123",
+      "patientName": "Jane D.",
+      "level": "crisis",
+      "confidence": 0.95,
+      "context": "journal",
+      "createdAt": "2026-04-15T14:30:00Z",
+      "resolvedAt": null
+    }
+  ]
+}
+```
+
+**Notes:**
+- Only returns alerts for provider's linked patients
+- Requires provider or admin role
+
+### POST `/api/provider/alerts/[alertId]/resolve`
+Mark distress alert as resolved.
+
+**Request:**
+```json
+{
+  "notes": "Contacted patient, safety plan in place"
+}
+```
+
+**Response (200):**
+```json
+{
+  "success": true
+}
+```
+
+### GET `/api/provider/patients`
+Get provider's patient roster.
+
+**Response (200):**
+```json
+{
+  "patients": [
+    {
+      "id": "user_123",
+      "displayName": "Jane D.",
+      "status": "active",
+      "linkedAt": "2026-03-01T...",
+      "lastAssessment": {
+        "type": "gad7",
+        "score": 12,
+        "severity": "moderate",
+        "date": "2026-04-10T..."
+      },
+      "unresolvedAlerts": 1
+    }
+  ]
+}
+```
+
+### GET `/api/provider/patients/[patientId]`
+Get detailed patient view.
+
+**Response (200):**
+```json
+{
+  "patient": {
+    "id": "user_123",
+    "displayName": "Jane D.",
+    "notes": "Working on panic disorder treatment",
+    "linkedAt": "2026-03-01T..."
+  },
+  "moodHistory": [
+    { "date": "2026-04-15", "mood": 6, "anxiety": 7 }
+  ],
+  "assessmentHistory": [
+    { "type": "gad7", "score": 12, "date": "2026-04-10T..." }
+  ],
+  "courseProgress": [
+    {
+      "courseId": "panic-disorder",
+      "title": "Panic Disorder Recovery",
+      "completedLessons": 5,
+      "totalLessons": 20,
+      "progress": 0.25
+    }
+  ],
+  "distressEvents": [
+    { "level": "mild", "context": "journal", "createdAt": "2026-04-12T..." }
+  ]
+}
+```
+
+### POST `/api/provider/patients/[patientId]/assign`
+Assign course or lesson to patient.
+
+**Request:**
+```json
+{
+  "courseId": "panic-disorder",
+  "lessonId": "breathing-techniques",
+  "dueDate": "2026-04-20",
+  "note": "Practice the 4-7-8 breathing exercise daily"
+}
+```
+
+**Response (201):**
+```json
+{
+  "success": true,
+  "assignmentId": 42
+}
+```
+
+**Notes:**
+- lessonId optional (null = assign entire course)
+- Saved to patientAssignment table
+
+### POST `/api/provider/session-prep/[patientId]`
+Generate AI session preparation notes.
+
+**Request:**
+```json
+{
+  "sessionType": "weekly-checkin"
+}
+```
+
+**Response (200):**
+```json
+{
+  "summary": "Jane has shown improvement in anxiety scores...",
+  "keyTopics": [
+    "Panic attack frequency decreased",
+    "Sleep quality improving",
+    "Still struggling with anticipatory anxiety"
+  ],
+  "recentAssessments": [
+    { "type": "gad7", "score": 10, "previousScore": 15, "delta": -5 }
+  ],
+  "suggestedFocus": "Consolidate breathing techniques, explore triggers for anticipatory anxiety",
+  "ragContext": [
+    "Lesson excerpt: Anticipatory anxiety often responds well to cognitive restructuring..."
+  ]
+}
+```
+
+**Notes:**
+- Compiles patient data (mood, assessments, progress)
+- RAG search over course content for relevant clinical guidance
+- AI-generated synthesis
+
+### POST `/api/provider/rag`
+Search clinical resources using semantic search.
+
+**Request:**
+```json
+{
+  "query": "How to help patients with panic disorder who avoid exposure?"
+}
+```
+
+**Response (200):**
+```json
+{
+  "results": [
+    {
+      "title": "Panic Disorder: Gradual Exposure",
+      "excerpt": "When patients avoid exposure, start with interoceptive exercises...",
+      "courseId": "panic-disorder",
+      "lessonId": "exposure-therapy",
+      "relevance": 0.89
+    }
+  ]
+}
+```
+
+**Notes:**
+- Vector search over contentEmbedding table
+- OpenAI text-embedding-3-small model
+- Returns top 5 results by cosine similarity
+
+## Admin `/api/admin/`
+
+### GET `/api/admin/providers`
+List all providers (verification queue).
+
+**Response (200):**
+```json
+{
+  "providers": [
+    {
+      "userId": "user_789",
+      "email": "dr.smith@example.com",
+      "displayName": "Dr. Sarah Smith",
+      "npiNumber": "1234567890",
+      "verificationStatus": "pending",
+      "createdAt": "2026-04-01T..."
+    }
+  ]
+}
+```
+
+### PUT `/api/admin/providers/[userId]`
+Approve or reject provider verification.
+
+**Request:**
+```json
+{
+  "action": "approve",
+  "notes": "NPI verified manually"
+}
+```
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "verificationStatus": "verified"
+}
+```
+
+**Notes:**
+- action: "approve" | "reject"
+- Updates providerProfile.verificationStatus
+- Sends email notification to provider
+
+## Forum `/api/forum/`
+
+### GET `/api/forum/discussions`
+List forum discussions.
+
+**Query params:**
+- `tag` - Filter by topic (anxiety, depression, etc.)
+- `limit` - Results per page (default 20)
+- `offset` - Pagination offset
+
+**Response (200):**
+```json
+{
+  "discussions": [
+    {
+      "id": "123",
+      "title": "Struggling with morning anxiety",
+      "author": { "id": "user_123", "username": "jane_d" },
+      "topic": "anxiety",
+      "postCount": 5,
+      "createdAt": "2026-04-15T..."
+    }
+  ],
+  "total": 42
+}
+```
+
+### POST `/api/forum/discussions`
+Create new discussion.
+
+**Request:**
+```json
+{
+  "title": "Need help with panic attacks",
+  "content": "I've been having frequent panic attacks...",
+  "tags": ["anxiety", "panic"]
+}
+```
+
+**Response (201):**
+```json
+{
+  "success": true,
+  "discussionId": "456"
+}
+```
+
+**Notes:**
+- AI moderation scan before publication
+- AI topic classification (async)
+- Crisis detection (if detected, alert provider)
+
+## AI `/api/ai/`
+
+### POST `/api/ai/chat`
+AI wellness coach conversation.
+
+**Request:**
+```json
+{
+  "message": "I'm feeling anxious about an upcoming presentation",
+  "sessionId": "session_123"
+}
+```
+
+**Response (200 - streaming):**
+```text
+data: {"chunk": "I understand that "}
+data: {"chunk": "presentations can "}
+data: {"chunk": "trigger anxiety. "}
+...
+data: {"done": true, "crisisDetected": false}
+```
+
+**Notes:**
+- Uses Claude Haiku 4.5 (default)
+- Streaming response
+- Real-time crisis detection
+- Session saved to coachSession table
+
+### POST `/api/ai/voice/tts`
+Text-to-speech synthesis.
+
+**Request:**
+```json
+{
+  "text": "Take a slow, deep breath in through your nose",
+  "voice": "alloy"
+}
+```
+
+**Response (200):**
+```
+Content-Type: audio/mpeg
+[Audio file bytes]
+```
+
+### POST `/api/ai/voice/stt`
+Speech-to-text transcription.
+
+**Request:**
+```
+Content-Type: multipart/form-data
+audio: [Audio file]
+```
+
+**Response (200):**
+```json
+{
+  "text": "I'm feeling overwhelmed today"
+}
+```
+
+## Health `/api/health`
+Service health check.
+
+**Response (200):**
+```json
+{
+  "status": "healthy",
+  "database": "connected",
+  "redis": "connected",
+  "maiaService": "available",
+  "timestamp": "2026-04-15T18:00:00Z"
+}
+```
+
+**Response (503 - unhealthy):**
+```json
+{
+  "status": "degraded",
+  "database": "connected",
+  "redis": "unavailable",
+  "maiaService": "timeout"
+}
+```

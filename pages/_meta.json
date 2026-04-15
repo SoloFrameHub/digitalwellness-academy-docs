@@ -1,5 +1,7 @@
 {
   "index": "Overview",
+  "architecture": "Architecture",
+  "api": "API",
   "platform": "Platform",
   "distress-classifier": "Distress Classifier",
   "forum": "Forum",

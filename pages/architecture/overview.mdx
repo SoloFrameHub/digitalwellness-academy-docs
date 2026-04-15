@@ -1,0 +1,222 @@
+# Architecture Overview
+
+Digital Wellness Academy is a Next.js 16 application with PostgreSQL, Redis, and Python ML services.
+
+## Stack
+
+- **Frontend**: Next.js 16 (App Router), React 18, Tailwind CSS
+- **Backend**: Next.js API routes, TypeScript
+- **Database**: PostgreSQL with Drizzle ORM
+- **Cache**: Redis (optional, for rate limiting)
+- **Auth**: Lucia 3 (session-based, Argon2 password hashing)
+- **AI Services**: 
+  - OpenAI/OpenRouter for coaching, quiz generation, TTS/STT
+  - Maia (Python FastAPI) for distress classification, forum topics, content quality
+- **Forum**: Flarum (JSON:API integration)
+- **Deployment**: Docker + Dokploy
+
+## Application Structure
+
+The app uses Next.js App Router with 8 layout groups serving different user types:
+
+### Route Groups
+
+**Auth** `app/(auth)/`
+- Signin, signup, password reset
+- Lucia session management
+
+**Onboarding** `app/(onboarding)/onboarding/`
+- 9-step onboarding flow
+- Symptom assessment, wellness scoring, crisis screening
+- Course recommendation engine
+
+**Default** `app/(default)/`
+- Patient-facing pages
+- Academy (therapeutic courses)
+- Optimization (advanced courses)
+- Dashboard, community, AI coach
+- Settings, billing, resources
+
+**Provider** `app/(provider)/provider/`
+- Provider dashboard
+- Patient roster and monitoring
+- Distress alerts
+- Session preparation tools
+- RAG-powered clinical resource search
+
+**Admin** `app/(admin)/`
+- Provider verification
+- Platform management
+
+**Marketing** `app/(marketing)/`
+- Public course catalog
+- Landing pages
+
+## Data Flow
+
+### Typical User Journey
+1. Sign up → Onboarding (9 steps)
+2. Assessment → Wellness scoring → Course recommendations
+3. Start course → Complete lessons → Interactive exercises
+4. Assessment tracking → Mood logging
+5. Optional: Link with provider → Receive assignments
+
+### Crisis Detection Flow
+1. User submits text (journal, assessment, forum post)
+2. Text sent to Maia distress classifier (3s timeout)
+3. Classification: none | mild | crisis
+4. If crisis: Show 988 modal + alert provider (if linked)
+5. Audit logged (metadata only, no text stored)
+
+### Provider Workflow
+1. Create account → NPI verification (auto or manual admin)
+2. Generate invite codes for patients
+3. Monitor patient dashboard (mood, assessments, distress alerts)
+4. Assign courses/lessons
+5. Session prep: AI-generated notes from patient data + RAG resources
+6. Review and resolve distress alerts
+
+## Security Architecture
+
+### HIPAA Compliance
+- **Zero-knowledge AI**: Distress classifier never logs input text
+- **Audit trail**: distressEvent table stores classification metadata only
+- **Encrypted in transit**: TLS 1.2+ for all AI service calls
+- **Access controls**: Providers see only their patients, admins see aggregated data
+- **Session security**: Lucia sessions with secure cookies, 24-hour sliding window
+
+### Authentication
+- Argon2 password hashing (19456 memory cost)
+- Session-based auth (not JWT)
+- Role-based access control (user, provider, admin)
+- Mock auth fallback for development
+
+### Rate Limiting
+- Redis-backed rate limiting on auth endpoints
+- Per-user request throttling
+- Fail-safe: Continues without Redis if unavailable
+
+## AI Services Architecture
+
+### Maia (Python FastAPI)
+Separate Docker container running 4 DistilBERT classifiers:
+- **Distress** (crisis detection)
+- **Forum Topic** (anxiety, depression, relationships, etc.)
+- **Content Quality** (clinical appropriateness)
+- **Content Atomization** (marketing extraction)
+
+All requests timeout at 3 seconds. Failures return safe defaults.
+
+### OpenAI/OpenRouter
+- **Coaching**: Claude Haiku 4.5 (default)
+- **Quiz Reflection**: Gemini 2.5 Flash (default)
+- **TTS/STT**: OpenAI Whisper + TTS-1
+- **Forum Moderation**: Gemini 2.5 Flash (default)
+
+Model selection configurable via environment variables.
+
+## Database Schema
+
+PostgreSQL with Drizzle ORM. Key tables:
+
+### Core
+- **user** - Lucia auth users (email, hashedPassword, role)
+- **session** - Lucia sessions
+- **profile** - WellnessProfile JSONB (questionnaire, assessment, progress)
+
+### Wellness Tracking
+- **moodEntry** - Daily mood/anxiety/sleep/energy ratings
+- **coachSession** - AI coaching transcripts
+
+### Safety
+- **distressEvent** - HIPAA-safe audit log (NO TEXT, metadata only)
+- **aiClassificationEvent** - All Maia classification results
+
+### Provider
+- **providerProfile** - Credentials, NPI, verification status
+- **providerPatient** - Patient-provider relationships
+- **patientAssignment** - Course/lesson assignments
+- **providerInvite** - Patient linking codes
+
+### Community
+- **forumBookmark** - User forum saves
+- **forumTopicClassification** - AI topic routing
+- **moderationLog** - AI moderation audit
+
+### Content
+- **lessonFeedback** - User lesson feedback
+- **contentQualityScore** - AI quality validation
+- **contentAtomizationTag** - Marketing content extraction
+- **contentEmbedding** - RAG vectors for provider search
+
+## Deployment Architecture
+
+### Docker Multi-Stage Build
+1. **Build stage**: npm install + next build (standalone output)
+2. **Runtime stage**: Minimal Node 20 Alpine image
+3. **Entrypoint**: Run DB migration, then start server
+4. **Healthcheck**: GET /api/health every 30s
+
+### Dokploy Auto-Deploy
+- Push to main → Auto-deploy
+- Domain: mental-health-education.soloframehub.com
+- SSL: Let's Encrypt via Traefik
+
+### Environment Requirements
+- PostgreSQL database
+- Redis (optional, for rate limiting)
+- Maia service (Python container)
+- OpenAI/OpenRouter API key
+- Flarum forum instance
+
+## Performance Characteristics
+
+### Response Times
+- Page loads: 200-500ms (static pages)
+- API endpoints: 50-300ms (DB queries)
+- AI coaching: 1-3s (streaming response)
+- Distress classification: 50-200ms (with 3s timeout)
+
+### Database Performance
+- Indexes on userId, courseId, lessonId, createdAt
+- JSONB indexes on profile.data
+- Unique constraints on email, session, provider-patient pairs
+
+### Caching Strategy
+- Static pages: CDN cached
+- API responses: No caching (personalized data)
+- Redis: Session store, rate limiting only
+
+## Scalability Considerations
+
+### Horizontal Scaling
+- Stateless Next.js server (session in DB)
+- Shared PostgreSQL (connection pooling)
+- Shared Redis (optional)
+
+### Database Scaling
+- Read replicas for analytics queries
+- JSONB indexes for profile queries
+- Partitioning for distressEvent/aiClassificationEvent by date
+
+### AI Service Scaling
+- Maia: Multi-GPU deployment for higher throughput
+- OpenRouter: Automatic failover across providers
+- Queue-based processing for non-critical AI tasks
+
+## Monitoring & Observability
+
+### Health Checks
+- GET /api/health - Database, Redis, AI service connectivity
+- Docker healthcheck: 30s interval, 10s timeout
+
+### Error Handling
+- API errors: Structured error responses with codes
+- AI service failures: Graceful degradation (safe defaults)
+- Database failures: Retry logic with exponential backoff
+
+### Audit Logging
+- All distress events logged (metadata only)
+- All AI classifications logged
+- Provider actions logged (assignments, alert resolutions)
+- Forum moderation logged

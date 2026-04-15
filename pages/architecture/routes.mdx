@@ -1,0 +1,331 @@
+# Routes Reference
+
+Complete reference of all 72 pages in the application.
+
+## Auth Routes `app/(auth)/`
+
+Unauthenticated pages for account management.
+
+### `/signin`
+- Email/password login
+- Lucia session creation
+- Rate-limited (10 attempts per 15 min)
+- Redirects to /dashboard on success
+
+### `/signup`
+- New user registration
+- Email validation
+- Password requirements: min 12 characters
+- Auto-login on success → /onboarding/welcome
+
+### `/reset-password`
+- Password recovery flow
+- Email-based reset link
+- Token expiration: 1 hour
+
+## Onboarding Routes `app/(onboarding)/onboarding/`
+
+9-step guided onboarding flow for new users.
+
+### `/welcome`
+- Introduction to platform
+- Overview of onboarding process
+- Navigation to symptoms step
+
+### `/symptoms`
+- Primary symptom selection
+- Secondary symptoms (optional)
+- Severity rating: mild | moderate | severe
+- Duration selection
+- Saves to profile.questionnaire.primarySymptoms
+
+### `/goals`
+- Wellness goal selection
+- Learning style preferences
+- Time commitment (5-10-15-30 min/day)
+- Support network preference (alone, group, provider)
+
+### `/assessment`
+- Full GAD-7 (anxiety assessment)
+- Full PHQ-9 (depression screening)
+- Crisis screening (suicidal ideation check)
+- Auto-scores and stores in profile.assessment
+- PHQ-9 Item 9: If score >= 2, show crisis modal
+
+### `/your-experience`
+- Therapy history (yes/no, current therapist)
+- Current coping strategies
+- Unhelpful coping to change
+- Known triggers
+- Worst time of day
+
+### `/about-you`
+- Age range
+- Life stage (student, working, retired, etc.)
+- Living situation
+- Support network availability
+
+### `/in-your-words`
+- Free-text self-description prompts:
+  - "What does a good day look like for you?"
+  - "What's your biggest challenge right now?"
+  - "What kind of support are you hoping for?"
+  - "Do you notice any patterns?"
+
+### `/safety`
+- Crisis resource acknowledgment
+- 988 Suicide & Crisis Lifeline information
+- Emergency contact information
+- Confirmation before proceeding
+
+### Completion Logic
+On completing final step:
+1. Compute wellness dimension scores (anxiety, mood, sleep, stress, nutrition)
+2. Run recommendation engine (map symptoms to courses)
+3. Set currentCourse to first recommended course
+4. Mark onboardingCompleted = true
+5. Redirect to /dashboard
+
+## Default (Patient) Routes `app/(default)/`
+
+Protected routes for authenticated patients.
+
+### Academy Routes
+
+#### `/academy`
+- Course catalog (therapeutic school)
+- Shows recommended courses first
+- Filter by category, completion status
+- Start new course or resume current
+
+#### `/academy/[courseId]`
+- Course landing page
+- Lesson list with completion status
+- Course metadata (duration, framework, research)
+- Start first incomplete lesson
+
+#### `/academy/[courseId]/[lessonId]`
+- Full lesson viewer
+- MDX content rendering
+- Interactive components (ThoughtRecord, Quiz, etc.)
+- Complete button at bottom
+- Lesson feedback form
+
+#### `/academy/[courseId]/complete`
+- Course completion celebration
+- Certificate generation
+- Related course recommendations
+- Badge unlock (if applicable)
+
+#### `/academy/my-path`
+- Personalized course recommendations
+- Based on symptoms + wellness scores
+- Recommended courses vs. all courses
+
+### Optimization Routes
+
+#### `/optimization`
+- Advanced course catalog
+- Peak performance courses
+- Requires completion of foundational courses
+
+#### `/optimization/[courseId]`
+- Course landing (same as academy)
+
+#### `/optimization/[courseId]/[lessonId]`
+- Lesson viewer (same as academy)
+
+### Dashboard Routes
+
+#### `/dashboard`
+- Wellness dimension scores (0-100 scale)
+- Current course progress
+- Assessment history charts
+- Mood entry quick add
+- AI coach shortcut
+- Provider status (if linked)
+
+#### `/dashboard/analytics`
+- Detailed progress charts
+- Assessment trend graphs
+- Course completion rates
+- Time spent analysis
+- Mood tracking visualization
+
+### Community Routes
+
+#### `/community/feed`
+- Activity feed (recent discussions, posts)
+- AI-filtered by relevance
+- Topic filters (anxiety, depression, etc.)
+
+#### `/community/forum`
+- Forum discussions list
+- Create new discussion
+- AI topic classification
+- Moderation layer (pre-publication scan)
+
+#### `/community/forum/post/[id]`
+- Discussion detail
+- Reply thread
+- Like/bookmark
+- Report inappropriate content
+
+#### `/community/meetups`
+- Virtual meetup calendar
+- RSVP to events
+- Create meetup (if enabled)
+
+#### `/community/users-tabs`
+- User directory (tabbed view)
+- Search by name, interests
+- View user profiles
+
+#### `/community/users-tiles`
+- User directory (tile view)
+- Avatar grid
+- Quick profile access
+
+### AI Coach Routes
+
+#### `/coach`
+- AI wellness coaching chat interface
+- Voice input/output (optional)
+- Crisis detection in real-time
+- Session history
+- Topic suggestions (anxiety, breathing, etc.)
+
+### Settings Routes
+
+#### `/settings/account`
+- Email, password update
+- Display name, avatar
+- Account deletion
+
+#### `/settings/billing`
+- Subscription status
+- Payment method management
+- Invoice history
+
+#### `/settings/plans`
+- Subscription tier selection
+- Upgrade/downgrade
+- Billing cycle (monthly/annual)
+
+#### `/settings/notifications`
+- Email notification preferences
+- Push notification settings
+- Alert frequency
+
+#### `/settings/feedback`
+- Submit platform feedback
+- Bug report
+- Feature request
+
+#### `/settings/apps`
+- Connected apps (if any)
+- API access tokens (future)
+
+### Resources Routes
+
+#### `/resources/crisis`
+- Permanent crisis resources page
+- Always accessible (no auth required)
+- 988 Suicide & Crisis Lifeline
+- Crisis Text Line
+- Trevor Project
+- Veterans Crisis Line
+- SAMHSA National Helpline
+- Emergency services (911)
+
+## Provider Routes `app/(provider)/provider/`
+
+Protected routes for verified providers.
+
+### `/dashboard`
+- Patient alerts overview
+- Unresolved distress events
+- Recent patient assessments
+- Quick links to patient pages
+
+### `/alerts`
+- All distress alerts (resolved + unresolved)
+- Filter by patient, date, severity
+- Bulk resolve action
+- Alert detail with context
+
+### `/patients`
+- Patient roster
+- Search, filter, sort
+- Patient status (active, discharged)
+- Add patient via invite code
+
+### `/patients/[patientId]`
+- Patient detail view
+- Mood history chart
+- Assessment trend graphs
+- Course progress
+- Distress event log
+- Assign course/lesson
+- Private provider notes
+- Session prep button
+
+### `/profile`
+- Provider profile editing
+- Credentials, specialty
+- NPI number (auto-verified)
+- Verification status
+- Generate patient invite codes
+
+### `/resources`
+- Clinical resource library
+- RAG search (semantic search over course content)
+- Evidence-based guidelines
+- Treatment protocols
+
+## Admin Routes `app/(admin)/`
+
+Platform administration.
+
+### `/admin/providers`
+- Provider verification queue
+- Pending verifications
+- Approve/reject with notes
+- Manual NPI verification override
+
+## Marketing Routes `app/(marketing)/`
+
+Public-facing pages.
+
+### `/courses`
+- Public course catalog
+- Course previews (first lesson sample)
+- Sign up CTA
+
+## Other Routes
+
+### Provider Signup Flow
+- `/provider-signup` - Registration with NPI
+- `/provider-pending` - Waiting for verification
+- `/provider-rejected` - Rejection notice
+
+### Alternative/Testing Routes
+- `app/(alternative)` - Component library showcase (dev only)
+- `app/(double-sidebar)` - Messages, inbox UI (future feature)
+
+## Route Protection
+
+### Middleware Protection
+- All routes under `(default)`, `(provider)`, `(admin)` require auth
+- Unauthenticated users redirected to `/signin`
+- Onboarding incomplete users redirected to `/onboarding/welcome`
+
+### Role-Based Access
+- Provider routes: require `role = 'provider'` OR `role = 'admin'`
+- Admin routes: require `role = 'admin'`
+- Patient routes: any authenticated user
+
+### Session Validation
+- Lucia validates session on every request
+- Expired sessions cleared, user redirected to signin
+- 24-hour sliding window (extends on activity)
