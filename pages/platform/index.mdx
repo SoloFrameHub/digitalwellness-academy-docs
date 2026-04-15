@@ -1,0 +1,98 @@
+# Platform Overview
+
+The Digital Wellness Academy platform is a Next.js 16 application combining clinical mental health education with peak performance optimization on a single HIPAA-compliant infrastructure.
+
+## Architecture
+
+**Two-School Model:**
+- **Therapeutic School**: 21+ courses, 380+ lessons — clinical treatment support (anxiety, depression, trauma, sleep, stress)
+- **Optimization School**: 19 courses — peak performance, resilience, preventive wellness (Five Pillars framework)
+
+**Shared Infrastructure:**
+- Authentication (Lucia sessions)
+- Database (PostgreSQL with Drizzle ORM)
+- Payment processing (Polar)
+- Safety systems (distress classifier)
+
+**Isolated Components:**
+- Content libraries (separate course catalogs)
+- Progress tracking (separate completion data)
+- Onboarding flows (different symptom vs. goal-based routing)
+- Safety models (ML for therapeutic, keyword for optimization)
+
+## Key Differentiators
+
+1. **Provider Integration** — Licensed therapists assign courses, track progress, receive crisis alerts
+2. **AI Safety** — Custom DistilBERT classifier with HIPAA zero-knowledge architecture
+3. **Analytics Moat** — Continuous improvement via real-world learning data (Day 1 problem → Day 2 fix)
+4. **Content Atomization** — One lesson → 100+ marketing assets for practice growth
+5. **Community Network Effect** — Forum engagement drives retention and reveals content gaps
+
+## Technology Stack
+
+| Layer | Technology |
+|-------|-----------|
+| **Framework** | Next.js 16 + React 19 + TypeScript 5.7 |
+| **Styling** | Tailwind CSS 4 + Framer Motion |
+| **Database** | PostgreSQL (Drizzle ORM) |
+| **Cache** | Redis (ioredis) |
+| **Authentication** | Lucia Auth (session-based) |
+| **ML** | DistilBERT (FastAPI service) |
+| **AI Services** | OpenAI (GPT, embeddings, TTS/STT) |
+| **Email** | Resend |
+| **Payments** | Polar |
+| **Analytics** | Metabase |
+| **Forum** | Flarum (JSON:API) |
+| **Deployment** | Docker + Dokploy (Swarm) |
+| **Hosting** | Hostinger VPS (migrating to GCP) |
+
+## Routes Overview
+
+### Learning Routes
+- `/dashboard` — Wellness scores, course progress, recommendations
+- `/academy` — Course browser
+- `/academy/my-path` — Personalized learning path
+- `/academy/[courseId]` — Course detail
+- `/academy/[courseId]/[lessonId]` — Lesson player
+- `/optimization/[courseId]/[lessonId]` — Optimization lesson player
+
+### Provider Routes
+- `/provider/dashboard` — Provider overview
+- `/provider/patients` — Patient roster
+- `/provider/alerts` — Crisis/distress alerts
+- `/provider/resources` — RAG clinical knowledge search
+- `/provider/patients/[patientId]` — Patient detail with assignment engine
+
+### Community Routes
+- `/community/forum` — Flarum discussions
+- `/community/meetups` — Event discovery
+- `/messages` — Private messaging
+- `/inbox` — Inbox management
+
+### Tools
+- `/coach` — AI wellness coach (streaming chat)
+- `/resources/crisis` — Crisis resources (always accessible)
+
+## Database Schema
+
+**12 Core Tables:**
+1. `user` — Authentication, email, role (user|provider|admin)
+2. `session` — Lucia auth sessions
+3. `profile` — Extended user profile (JSONB), symptoms, wellness scores
+4. `moodEntry` — Daily mood check-ins
+5. `coachSession` — AI coach conversation history
+6. `lessonFeedback` — Star ratings + verbatim feedback
+7. `forumBookmark` — Saved forum discussions
+8. `distressEvent` — Audit log for distress classifications (no PHI)
+9. `providerProfile` — Provider credentials, specialties, verification status
+10. `providerPatient` — Provider-patient relationships with display names + notes
+11. `patientAssignment` — Course/lesson assignments with due dates
+12. `providerInvite` — Time-limited invite codes for patient linking
+13. `contentEmbedding` — Pre-computed embeddings for RAG search
+
+## Next Steps
+
+- [Explore Capabilities](/platform/capabilities/overview) — Complete feature inventory
+- [API Reference](/platform/api/overview) — All endpoints documented
+- [Architecture](/platform/architecture/system-design) — System design deep-dive
+- [Provider Guide](/platform/guides/provider-portal) — How to use the provider portal
