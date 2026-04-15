@@ -1,19 +1,19 @@
-# Safety & Crisis Response
+# Safety and Crisis Response
 
 Comprehensive crisis detection, provider alerting, and HIPAA-compliant audit trail.
 
 ## Crisis Screening Protocol
 
 ### Onboarding Flow
-- **Endpoint**: `/api/onboarding/crisis-screening`
-- **Detection**: Suicidal ideation, self-harm thoughts, immediate danger
-- **Risk Levels**: none | low | moderate | high | immediate
+- Endpoint: /api/onboarding/crisis-screening
+- Detection: Suicidal ideation, self-harm thoughts, immediate danger
+- Risk Levels: none, low, moderate, high, immediate
 
 ### Features
-- **988 Resources**: Suicide & Crisis Lifeline integration
-- **Safety Plan Generation**: Guided safety planning
-- **Prevents Onboarding**: If immediate risk detected, requires crisis resources first
-- **Documentation**: Risk level stored for provider review
+- 988 Resources: Suicide and Crisis Lifeline integration
+- Safety Plan Generation: Guided safety planning
+- Prevents Onboarding: If immediate risk detected, requires crisis resources first
+- Documentation: Risk level stored for provider review
 
 ## Distress Classifier
 
@@ -26,185 +26,189 @@ Text analyzed from:
 - Checkins
 
 ### Classification Thresholds
-- **None** (< 60% confidence): No intervention
-- **Mild** (60-85% confidence): Gentle check-in prompt
-- **Crisis** (>= 85% confidence): Modal + provider alert + 988 resources
+- None (less than 60% confidence): No intervention
+- Mild (60-85% confidence): Gentle check-in prompt
+- Crisis (85% confidence or higher): Modal + provider alert + 988 resources
 
 ### Zero-Knowledge Architecture
-**Privacy Guarantees**:
-- Input text **never stored**
-- Input text **never logged**
+Privacy Guarantees:
+- Input text never stored
+- Input text never logged
 - Only metadata persisted: classification level, confidence, context, timestamp
 - No PHI in audit logs
 - Encrypted in transit (TLS 1.2+)
 - BAA-ready for HIPAA compliance
 
 ### Fail-Safe
-- **Timeout**: If classifier unavailable (>3s timeout), returns 'none'
-- **User Experience**: Unaffected by service outages
-- **Degraded Safety**: Fallback to keyword gate and PHQ-9 Item 9 gate
+- Timeout: If classifier unavailable (over 3s timeout), returns 'none'
+- User Experience: Unaffected by service outages
+- Degraded Safety: Fallback to keyword gate and PHQ-9 Item 9 gate
 
 ## PHQ-9 Item 9 Gate
 
 ### Independent Safety Layer
-- **Item 9**: "Thoughts that you would be better off dead or of hurting yourself"
-- **Scoring**: 0 (Not at all) to 3 (Nearly every day)
-- **Threshold**: Response >= 2 triggers crisis modal
-- **Independence**: Works separately from ML classifier (redundant safety)
+- Item 9: "Thoughts that you would be better off dead or of hurting yourself"
+- Scoring: 0 (Not at all) to 3 (Nearly every day)
+- Threshold: Response of 2 or higher triggers crisis modal
+- Independence: Works separately from ML classifier (redundant safety)
 
 ### Action Triggers
-1. Crisis modal appears immediately
-2. 988 hotline displayed prominently
-3. Crisis Text Line (text HOME to 741741)
-4. Emergency services (911)
-5. Provider alert sent (if patient has provider)
+When threshold is met:
+- Crisis modal appears immediately
+- 988 hotline displayed prominently
+- Crisis Text Line (text HOME to 741741)
+- Emergency services (911)
+- Provider alert sent (if patient has provider)
 
 ### Coverage
-- **Onboarding**: During initial PHQ-9 assessment
-- **Ongoing**: Every PHQ-9 completion throughout platform use
-- **Real-Time**: Immediate response, no delay
+- Onboarding: During initial PHQ-9 assessment
+- Ongoing: Every PHQ-9 completion throughout platform use
+- Real-Time: Immediate response, no delay
 
 ## Crisis Resource Modal
 
 ### Permanent Accessibility
-- **Location**: Available via sidebar on any page
-- **Always Visible**: Not hidden behind menus
-- **One-Click Access**: Crisis button always present
+- Always available via crisis button in header
+- Accessible from any page
+- No authentication required (available to all visitors)
+- Mobile-optimized for emergency access
 
 ### Resources Included
-- **988 Suicide & Crisis Lifeline** (call or text)
-- **Crisis Text Line** (text HOME to 741741)
-- **Emergency Services** (911)
-- **International Hotlines** (for global users)
-- **Safety Planning** (guided prompts)
+- 988 Suicide and Crisis Lifeline
+- Crisis Text Line (text HOME to 741741)
+- Trevor Project (for LGBTQ+ youth)
+- Veterans Crisis Line
+- SAMHSA National Helpline
+- Local emergency services (911)
 
 ## Provider Alert System
 
 ### Crisis Alerts
-**Delivery**:
-- Email notification (immediate)
-- In-app notification (badge + alert panel)
-- SMS (optional, configured per provider)
+When distress classifier detects crisis-level distress or PHQ-9 Item 9 threshold is met:
+- Immediate email alert to assigned provider
+- Alert stored in providerAlert table
+- Alert visible in provider dashboard
+- Alert includes:
+  - Patient name
+  - Alert type (distress or suicidal ideation)
+  - Trigger context (journal, assessment, forum)
+  - Timestamp
+  - Severity level
+  - Action taken (crisis modal shown, resources provided)
 
-**Contents**:
-- Patient display name (no real name - HIPAA)
-- Distress level (Mild | Crisis)
-- Confidence score (percentage)
-- Context (journal | assessment | forum | checkin)
-- Timestamp
-- Link to patient dashboard
-
-**Priority**:
-- **Priority 0**: Never suppressed, always delivered
-- Overrides notification preferences
-- Requires acknowledgment
+Crisis alerts require provider acknowledgment. Providers can:
+- Mark as reviewed
+- Add notes
+- Schedule follow-up
+- Escalate to emergency services if needed
 
 ### Alert Resolution
-- **Provider Action**: Mark alert as addressed
-- **Resolution Notes**: Provider documents action taken
-- **Tracking**: Stored for compliance and outcomes measurement
-- **Follow-Up**: Can assign courses, schedule check-in, refer to higher level of care
+- Providers must acknowledge crisis alerts
+- Notes field for documentation
+- Resolution timestamp tracked
+- Audit trail maintained for HIPAA compliance
 
 ### Alert Types
-- **Clinical Flag** (Priority 0): Crisis detected, immediate action needed
-- **Reassess**: Suggests re-taking assessments after prolonged inactivity
-- **Inactivity**: 7+ days no engagement
-- **Stagnation**: No progress despite engagement
+- Crisis distress detected
+- Suicidal ideation (PHQ-9 Item 9)
+- Severe symptom worsening
+- Treatment plan non-adherence
 
 ## Wellness Alerts
 
 ### Alert Generation
-**Clinical-Flag** (Priority 0):
-- **Trigger**: PHQ-9 severe score + 7+ days inactivity
-- **Never Suppressed**: Always delivered
-- **Action Required**: Provider must acknowledge and act
+Providers receive alerts when:
+- Patient symptom scores worsen significantly (20+ point drop in wellness dimension)
+- Patient disengages (no logins for 7+ days after active period)
+- Assessment scores increase (PHQ-9 or GAD-7 jump by 5+ points)
+- Treatment goals not progressing (no course progress in 14 days)
 
-**Reassess**:
-- Suggests patient retake assessments
-- Triggered after inactivity period
-
-**Inactivity**:
-- 7+ days no engagement
-- Gentle nudge to check in
-
-**Stagnation**:
-- Engagement present but no progress
-- May indicate need for intervention
+These are lower-priority alerts compared to crisis alerts. Providers can:
+- Review patient dashboard
+- Send check-in message
+- Adjust assigned courses
+- Schedule session
+- Mark as reviewed
 
 ### Smart Recommendations
-- Based on weak wellness dimensions
-- Suggests specific courses to address low-scoring areas
-- Automated but provider can override
+Alerts include AI-generated recommendations based on:
+- Patient engagement patterns
+- Assessment score trends
+- Course progress data
+- Provider notes history
 
 ## Audit Trail
 
 ### HIPAA-Compliant Logging
+All safety-related actions logged:
+- Crisis screening results
+- Distress classifier outputs (metadata only, no input text)
+- PHQ-9 Item 9 responses
+- Crisis modal displays
+- Provider alerts sent
+- Provider alert acknowledgments
+- Patient crisis resource access
 
-**`distressEvent` Table**:
-- user_id (links to user)
-- classification_level (none | mild | crisis)
-- confidence_score (0.0 - 1.0)
-- context (journal | assessment | forum | checkin)
-- timestamp
-- **NO TEXT CONTENT** (privacy protected)
-
-**Purpose**:
-- Compliance reviews
-- False positive monitoring
-- Classifier accuracy audits
-- Provider alert actionability tracking
-- Outcomes measurement
+Audit log includes:
+- Timestamp
+- User ID
+- Action type
+- Metadata (severity, confidence, context)
+- IP address (anonymized after 30 days)
 
 ### Access Controls
-- **Providers**: Can view events for their patients only
-- **Admins**: Can view aggregate statistics (no individual patient data)
-- **Compliance**: Full audit trail for regulatory reviews
+- Audit logs visible to admins only
+- Providers can view logs for their assigned patients
+- Patients cannot view audit logs (privacy protection)
 
 ## Keyword Gate (Optimization School)
 
 ### Lightweight Safety Layer
-- **Purpose**: Cost-effective crisis detection for optimization content
-- **Method**: Keyword matching (not ML)
-- **Coverage**: Optimization school only (therapeutic uses ML classifier)
+For optimization school content (lower clinical risk), keyword-based safety layer:
+- Scans user input for crisis keywords
+- Lower computational overhead than ML classifier
+- Sufficient for preventive/optimization content
 
 ### Trigger Keywords
-- Suicide-related terms
-- Self-harm terms
-- Crisis language
+Crisis keywords include:
+- suicide, kill myself, end it all
+- self-harm, cutting, hurt myself
+- no reason to live, better off dead
 
 ### Action
-- Same as ML classifier: modal + resources
-- Less accurate (higher false positive rate ~15%)
-- But computationally cheaper for optimization content
+When keyword detected:
+- Crisis resource modal shown
+- No provider alert (optimization students may not have providers)
+- Event logged for monitoring
+- User can dismiss and continue
 
 ## Forum Moderation Safety
 
 ### AI Pre-Publication Scan
-- **All Posts**: Scanned before going live
-- **Harmful Content**: Flagged for review
-- **Types Detected**:
-  - Pro-ana / pro-mia
-  - Self-harm promotion
-  - Violence
-  - Spam
+Before post publication:
+- Distress classifier analyzes post content
+- If crisis-level distress detected, user sees warning
+- User can choose to edit or publish anyway
+- If published, provider alert sent (if user has provider)
 
 ### Post-Publication Monitoring
-- **Distress Classifier**: Runs on all published posts
-- **Crisis Detection**: Same >= 85% threshold
-- **Provider Alerts**: If user has provider
-- **User Support**: Crisis modal for post author
+- Distress Classifier: Runs on all published posts
+- Crisis Detection: Same 85% threshold
+- Provider Alerts: If user has provider
+- User Support: Crisis modal for post author
 
 ## Safety Metrics
 
 ### Performance Tracking
-- **Sensitivity**: >95% (catches true crises)
-- **Precision**: >85% (minimizes false alarms)
-- **False Positive Rate**: <5% at crisis threshold
-- **Provider Alert Actionability**: >70% of alerts result in provider action
-- **Response Time**: <24h for crisis alert provider response
+- Total crisis screenings
+- Distress classifications by severity
+- Provider alerts sent
+- Provider alert response times
+- Crisis resource modal displays
+- PHQ-9 Item 9 triggers
 
 ### Continuous Improvement
-- Manual audit sampling of crisis classifications
-- Provider feedback on alert accuracy
-- Adjustment of confidence thresholds based on data
-- Quarterly safety system review
+- False positive rate monitoring
+- Provider feedback on alert usefulness
+- User feedback on crisis resources
+- Classifier performance evaluation
