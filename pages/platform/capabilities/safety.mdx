@@ -28,7 +28,7 @@ Text analyzed from:
 ### Classification Thresholds
 - **None** (< 60% confidence): No intervention
 - **Mild** (60-85% confidence): Gentle check-in prompt
-- **Crisis** (≥ 85% confidence): Modal + provider alert + 988 resources
+- **Crisis** (>= 85% confidence): Modal + provider alert + 988 resources
 
 ### Zero-Knowledge Architecture
 **Privacy Guarantees**:
@@ -49,7 +49,7 @@ Text analyzed from:
 ### Independent Safety Layer
 - **Item 9**: "Thoughts that you would be better off dead or of hurting yourself"
 - **Scoring**: 0 (Not at all) to 3 (Nearly every day)
-- **Threshold**: Response ≥2 triggers crisis modal
+- **Threshold**: Response >= 2 triggers crisis modal
 - **Independence**: Works separately from ML classifier (redundant safety)
 
 ### Action Triggers
@@ -190,7 +190,7 @@ Text analyzed from:
 
 ### Post-Publication Monitoring
 - **Distress Classifier**: Runs on all published posts
-- **Crisis Detection**: Same ≥85% threshold
+- **Crisis Detection**: Same >= 85% threshold
 - **Provider Alerts**: If user has provider
 - **User Support**: Crisis modal for post author
 
