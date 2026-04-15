@@ -1,0 +1,210 @@
+# Safety & Crisis Response
+
+Comprehensive crisis detection, provider alerting, and HIPAA-compliant audit trail.
+
+## Crisis Screening Protocol
+
+### Onboarding Flow
+- **Endpoint**: `/api/onboarding/crisis-screening`
+- **Detection**: Suicidal ideation, self-harm thoughts, immediate danger
+- **Risk Levels**: none | low | moderate | high | immediate
+
+### Features
+- **988 Resources**: Suicide & Crisis Lifeline integration
+- **Safety Plan Generation**: Guided safety planning
+- **Prevents Onboarding**: If immediate risk detected, requires crisis resources first
+- **Documentation**: Risk level stored for provider review
+
+## Distress Classifier
+
+### Multi-Context Analysis
+Text analyzed from:
+- Journal entries
+- Assessment free-text responses
+- Forum posts
+- Reflection prompts
+- Checkins
+
+### Classification Thresholds
+- **None** (< 60% confidence): No intervention
+- **Mild** (60-85% confidence): Gentle check-in prompt
+- **Crisis** (≥ 85% confidence): Modal + provider alert + 988 resources
+
+### Zero-Knowledge Architecture
+**Privacy Guarantees**:
+- Input text **never stored**
+- Input text **never logged**
+- Only metadata persisted: classification level, confidence, context, timestamp
+- No PHI in audit logs
+- Encrypted in transit (TLS 1.2+)
+- BAA-ready for HIPAA compliance
+
+### Fail-Safe
+- **Timeout**: If classifier unavailable (>3s timeout), returns 'none'
+- **User Experience**: Unaffected by service outages
+- **Degraded Safety**: Fallback to keyword gate and PHQ-9 Item 9 gate
+
+## PHQ-9 Item 9 Gate
+
+### Independent Safety Layer
+- **Item 9**: "Thoughts that you would be better off dead or of hurting yourself"
+- **Scoring**: 0 (Not at all) to 3 (Nearly every day)
+- **Threshold**: Response ≥2 triggers crisis modal
+- **Independence**: Works separately from ML classifier (redundant safety)
+
+### Action Triggers
+1. Crisis modal appears immediately
+2. 988 hotline displayed prominently
+3. Crisis Text Line (text HOME to 741741)
+4. Emergency services (911)
+5. Provider alert sent (if patient has provider)
+
+### Coverage
+- **Onboarding**: During initial PHQ-9 assessment
+- **Ongoing**: Every PHQ-9 completion throughout platform use
+- **Real-Time**: Immediate response, no delay
+
+## Crisis Resource Modal
+
+### Permanent Accessibility
+- **Location**: Available via sidebar on any page
+- **Always Visible**: Not hidden behind menus
+- **One-Click Access**: Crisis button always present
+
+### Resources Included
+- **988 Suicide & Crisis Lifeline** (call or text)
+- **Crisis Text Line** (text HOME to 741741)
+- **Emergency Services** (911)
+- **International Hotlines** (for global users)
+- **Safety Planning** (guided prompts)
+
+## Provider Alert System
+
+### Crisis Alerts
+**Delivery**:
+- Email notification (immediate)
+- In-app notification (badge + alert panel)
+- SMS (optional, configured per provider)
+
+**Contents**:
+- Patient display name (no real name - HIPAA)
+- Distress level (Mild | Crisis)
+- Confidence score (percentage)
+- Context (journal | assessment | forum | checkin)
+- Timestamp
+- Link to patient dashboard
+
+**Priority**:
+- **Priority 0**: Never suppressed, always delivered
+- Overrides notification preferences
+- Requires acknowledgment
+
+### Alert Resolution
+- **Provider Action**: Mark alert as addressed
+- **Resolution Notes**: Provider documents action taken
+- **Tracking**: Stored for compliance and outcomes measurement
+- **Follow-Up**: Can assign courses, schedule check-in, refer to higher level of care
+
+### Alert Types
+- **Clinical Flag** (Priority 0): Crisis detected, immediate action needed
+- **Reassess**: Suggests re-taking assessments after prolonged inactivity
+- **Inactivity**: 7+ days no engagement
+- **Stagnation**: No progress despite engagement
+
+## Wellness Alerts
+
+### Alert Generation
+**Clinical-Flag** (Priority 0):
+- **Trigger**: PHQ-9 severe score + 7+ days inactivity
+- **Never Suppressed**: Always delivered
+- **Action Required**: Provider must acknowledge and act
+
+**Reassess**:
+- Suggests patient retake assessments
+- Triggered after inactivity period
+
+**Inactivity**:
+- 7+ days no engagement
+- Gentle nudge to check in
+
+**Stagnation**:
+- Engagement present but no progress
+- May indicate need for intervention
+
+### Smart Recommendations
+- Based on weak wellness dimensions
+- Suggests specific courses to address low-scoring areas
+- Automated but provider can override
+
+## Audit Trail
+
+### HIPAA-Compliant Logging
+
+**`distressEvent` Table**:
+- user_id (links to user)
+- classification_level (none | mild | crisis)
+- confidence_score (0.0 - 1.0)
+- context (journal | assessment | forum | checkin)
+- timestamp
+- **NO TEXT CONTENT** (privacy protected)
+
+**Purpose**:
+- Compliance reviews
+- False positive monitoring
+- Classifier accuracy audits
+- Provider alert actionability tracking
+- Outcomes measurement
+
+### Access Controls
+- **Providers**: Can view events for their patients only
+- **Admins**: Can view aggregate statistics (no individual patient data)
+- **Compliance**: Full audit trail for regulatory reviews
+
+## Keyword Gate (Optimization School)
+
+### Lightweight Safety Layer
+- **Purpose**: Cost-effective crisis detection for optimization content
+- **Method**: Keyword matching (not ML)
+- **Coverage**: Optimization school only (therapeutic uses ML classifier)
+
+### Trigger Keywords
+- Suicide-related terms
+- Self-harm terms
+- Crisis language
+
+### Action
+- Same as ML classifier: modal + resources
+- Less accurate (higher false positive rate ~15%)
+- But computationally cheaper for optimization content
+
+## Forum Moderation Safety
+
+### AI Pre-Publication Scan
+- **All Posts**: Scanned before going live
+- **Harmful Content**: Flagged for review
+- **Types Detected**:
+  - Pro-ana / pro-mia
+  - Self-harm promotion
+  - Violence
+  - Spam
+
+### Post-Publication Monitoring
+- **Distress Classifier**: Runs on all published posts
+- **Crisis Detection**: Same ≥85% threshold
+- **Provider Alerts**: If user has provider
+- **User Support**: Crisis modal for post author
+
+## Safety Metrics
+
+### Performance Tracking
+- **Sensitivity**: >95% (catches true crises)
+- **Precision**: >85% (minimizes false alarms)
+- **False Positive Rate**: <5% at crisis threshold
+- **Provider Alert Actionability**: >70% of alerts result in provider action
+- **Response Time**: <24h for crisis alert provider response
+
+### Continuous Improvement
+- Manual audit sampling of crisis classifications
+- Provider feedback on alert accuracy
+- Adjustment of confidence thresholds based on data
+- Quarterly safety system review

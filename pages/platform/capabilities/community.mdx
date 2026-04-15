@@ -1,0 +1,156 @@
+# Community & Engagement
+
+Forum system, meetups, messaging, and peer support with AI moderation.
+
+## Forum System (Flarum Integration)
+
+### Platform
+- **Flarum** - Self-hosted PHP forum with JSON:API
+- **Communication**: Next.js ↔ Flarum via JSON:API
+- **Authentication Bridge**: Lucia users map to Flarum users (synchronized logins)
+
+### Features
+- **Discussion Boards** - Organized by clinical topic and pillar
+- **Threaded Conversations** - Posts and replies
+- **Topic Tagging** - Auto-classified into: anxiety, depression, relationships, medication, coping-strategies, crisis, general-wellness, optimization
+- **Upvote/Like System** - Users upvote helpful posts (peer credibility signal)
+- **Bookmark Feature** - Save discussions (stored in `forumBookmark` table)
+- **Full-Text Search** - Across discussions + posts
+- **User Profiles** - Display username, avatar, join date, post count
+
+### AI Moderation
+- **Content Moderation**: AI flags potentially harmful content for human review
+  - Pro-ana / pro-mia content
+  - Self-harm encouragement
+  - Violence
+  - Spam
+- **Distress Monitoring**: All forum posts analyzed by DistilBERT classifier
+- **Crisis Posts**: Trigger provider alerts if user has assigned provider
+- **Moderation Queue**: Human review of AI-flagged content
+
+### Strategic Value
+1. **Retention**: Users who engage in forums have 3-5x higher retention
+2. **Improvement Signals**: Forum topics reveal content gaps
+   - If 50 posts ask about intrusive thoughts but only 2 mention relevant lesson → lesson needs improvement
+3. **Safety Redundancy**: AI moderation + distress classifier catch harmful content
+4. **Community Moat**: Active forum creates switching cost (users don't want to leave peer network)
+
+## Meetups & Events
+
+### Features
+- **Meetup Discovery**: Browse upcoming events
+- **Filtering**:
+  - Online vs Local
+  - Time-based (This Week, This Month, All Upcoming)
+- **User-Created**: Users can post their own meetups
+- **Event Types**:
+  - Provider-led group therapy sessions
+  - Peer support meetups
+  - Educational webinars
+  - Community building events
+
+### Route
+- `/community/meetups`
+
+### Use Cases
+- Group therapy cohorts
+- Peer accountability groups
+- Topic-specific support groups
+- Wellness challenges
+
+## Messaging System
+
+### Private Messaging
+- **Infrastructure**: Built-in messaging system
+- **Routes**:
+  - `/messages` - Private messaging
+  - `/inbox` - Inbox management
+- **Features**:
+  - User-to-user communication
+  - Provider-patient communication (optional)
+  - Thread management
+
+### Purpose
+- Peer support coordination
+- Provider communication
+- Community connections
+
+## Community Profiles
+
+### User Profiles
+- **Route**: `/community/profile`
+- **Visibility**: Public profiles for community members
+- **Display**:
+  - Username
+  - Avatar
+  - Join date
+  - Post count
+  - Discussion count
+  - Community reputation/stats
+
+### Privacy
+- No PHI displayed
+- Users control profile visibility
+- Display names only (not real names)
+
+## Topic Classification
+
+### AI-Powered Auto-Tagging
+Discussions classified into categories:
+- Anxiety
+- Depression
+- Relationships
+- Medication
+- Coping strategies
+- Crisis
+- General wellness
+- Optimization
+
+### Storage
+- `forumTopicClassification` table
+- Used for:
+  - Content organization
+  - Trend analysis
+  - Gap identification
+  - Personalized feed
+
+## Forum Safety Controls
+
+### AI Content Moderation
+- **Pre-Publishing**: AI scans before post goes live
+- **Harmful Content Detection**:
+  - Self-harm promotion
+  - Pro-eating disorder content
+  - Violence
+  - Spam/scams
+- **Human Review Queue**: Flagged content reviewed by moderators
+
+### Distress Classifier Integration
+- **All Posts Scanned**: DistilBERT analyzes every forum post
+- **Crisis Detection**: Same thresholds as journal/assessment (≥85% confidence)
+- **Provider Alerts**: If user has provider, they're notified of crisis posts
+- **Crisis Resources**: Crisis-level posts trigger modal with 988 hotline
+
+### Topic Routing
+- **AI Classification**: "needs-provider" vs "community-handles"
+- **Purpose**: Identify discussions requiring professional intervention
+- **Escalation**: Auto-flag for provider review when appropriate
+
+### Post Deletion
+- **Moderator Control**: Can remove harmful content
+- **Audit Trail**: Deletion logged with reason
+- **User Notification**: Author notified of removal with explanation
+
+## Engagement Metrics
+
+### Tracked Signals
+- **Posts + Replies**: Per user, per discussion
+- **Upvotes**: Helpful content identification
+- **Topic Distribution**: What users discuss most
+- **Peer Support Effectiveness**: Posts marked helpful, topic resolution
+- **User Retention**: Active community members have 3-5x retention
+
+### Analytics Use
+- **Content Gap Identification**: Frequent questions → missing lessons
+- **Community Health**: Engagement trends, active users, response rates
+- **Improvement Signals**: Feed into analytics moat for course iteration

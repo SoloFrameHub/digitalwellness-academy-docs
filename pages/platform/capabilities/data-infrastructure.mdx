@@ -1,0 +1,264 @@
+# Data & Infrastructure
+
+Database architecture, caching, storage, deployment, and HIPAA compliance.
+
+## Database Architecture
+
+### PostgreSQL Core
+- **ORM**: Drizzle (TypeScript-first)
+- **Deployment**: Dokploy-managed on VPS
+- **Future**: Cloud SQL with BAA (Google Cloud migration)
+
+### Schema (12 Core Tables)
+
+**Authentication & Identity**:
+1. `user` - Authentication, email, role (user | provider | admin)
+2. `session` - Lucia auth sessions
+3. `profile` - Extended user profile (JSONB), symptoms, wellness scores
+
+**Clinical & Engagement**:
+4. `moodEntry` - Daily mood check-ins (mood, anxiety, sleep, energy)
+5. `coachSession` - AI coach conversation history
+6. `lessonFeedback` - Star ratings + verbatim feedback
+
+**Community**:
+7. `forumBookmark` - Saved forum discussions
+
+**Safety & Compliance**:
+8. `distressEvent` - Audit log for distress classifications (NO PHI)
+
+**Provider System**:
+9. `providerProfile` - Provider credentials, specialties, verification status
+10. `providerPatient` - Provider-patient relationships with display names + notes
+11. `patientAssignment` - Course/lesson assignments with due dates
+12. `providerInvite` - Time-limited invite codes for patient linking
+
+**AI & Content**:
+13. `contentEmbedding` - Pre-computed embeddings for RAG search (JSONB float arrays)
+
+### Features
+- **JSONB**: Flexible profile storage (symptom lists, questionnaire responses)
+- **Foreign Keys**: Proper constraints with cascading deletes
+- **Multi-Tenant Support**: Provider-scoped patient data
+- **Row-Level Security (RLS)**: Planned for GCP migration (database-level tenant isolation)
+
+## Redis Caching
+
+### Current Use
+- **AI Context Caching**: 5min TTL for coach context
+- **Session Storage**: Hot session data
+- **Rate Limiting**: Per-user API limits tracked
+
+### Deployment
+- **Managed by**: Dokploy
+- **Network**: dokploy-network (internal)
+- **Access**: Internal only (not exposed)
+
+### Future Use
+- Query result caching
+- Real-time notification queue
+- WebSocket state management
+
+## S3-Compatible Cloud Storage
+
+### Supported Providers
+- **AWS S3**
+- **MinIO** (self-hosted)
+- **Cloudflare R2**
+
+### Configuration
+- Flexible endpoint configuration
+- Auto-bucket creation
+- Public URL generation (optional)
+- Access control per object
+
+### Use Cases
+- **PDFs**: Thought records, certificates, worksheets
+- **User Uploads**: Avatars, journal attachments
+- **Generated Content**: Session prep briefs, reports
+- **Backups**: Database dumps, configuration backups
+
+### Implementation
+- **Library**: `/lib/storage/s3.ts`
+- **Features**: Upload, download, delete, list, presigned URLs
+
+## Docker Deployment
+
+### Current Architecture (Hostinger VPS)
+
+**Docker Swarm** via Dokploy:
+- All services containerized
+- Internal `dokploy-network` overlay
+- Services communicate privately
+- Traefik reverse proxy for routing
+
+**Services**:
+- `dokploy` - Orchestration + UI
+- `dokploy-postgres` - Database
+- `dokploy-redis` - Cache
+- `dokploy-traefik` - Reverse proxy + SSL
+- `mental-health-platform` - Main Next.js app
+- `distress-classifier` - ML service (FastAPI)
+- `dwa-docs` - Documentation site
+
+### Auto-Deployment
+- **Trigger**: Push to GitHub main branch
+- **Dokploy**: Watches repo, auto-rebuilds
+- **Workflow**: 
+  1. GitHub webhook → Dokploy
+  2. Dokploy pulls latest code
+  3. Docker build
+  4. Zero-downtime rolling update
+  5. Health checks before routing traffic
+
+### Container Configuration
+**Main App**:
+- Base: Node.js 20 Alpine
+- Output: Standalone (single binary + dependencies)
+- Port: 3000 (internal)
+- Network: dokploy-network
+- Restart: unless-stopped
+
+**Distress Classifier**:
+- Base: Python 3.11
+- Framework: FastAPI
+- Port: 8001 (internal only)
+- Model: 255MB DistilBERT weights at `/opt/distress-classifier/model/`
+- Health checks: liveness + readiness probes
+
+## HIPAA Compliance
+
+### Zero-Knowledge Architecture
+- **Distress Classifier**: Text analyzed and discarded (never stored)
+- **Audit Logging**: Only metadata logged (no PHI)
+- **Provider Notes**: Display names used (not real names)
+- **Chat Sessions**: Encrypted, only accessible by user + assigned provider
+
+### Encryption
+**In Transit**:
+- TLS 1.2+ for all network communication
+- Internal service communication encrypted
+
+**At Rest**:
+- PostgreSQL encryption (Dokploy managed)
+- AES-256 for stored data
+- **Future**: CMEK (Customer-Managed Encryption Keys) on GCP
+
+### Access Controls
+- **Authentication**: Lucia session-based (not JWT - more secure)
+- **Password Hashing**: Argon2 (via @node-rs/argon2)
+- **Role-Based Access Control**: user | provider | admin
+- **Protected Routes**: Redirect to signin if not authenticated
+- **Session Storage**: PostgreSQL sessions table with auto-cleanup
+
+### Multi-Tenant Isolation
+**Current**:
+- Provider-scoped patient data (foreign key constraints)
+- Admin role segregation
+- Patient privacy via aliases (display names)
+
+**Future** (GCP Migration):
+- PostgreSQL Row-Level Security (RLS)
+- Database-level tenant isolation
+- Per-practice encryption keys (CMEK)
+
+### Business Associate Agreement (BAA)
+**Path Documented**:
+- Google Cloud migration with BAA coverage
+- Services: Cloud Run, Cloud SQL, Cloud Memorystore
+- Practice licensing includes BAA signing
+- HIPAA compliance at every tier (Starter, Growth, Enterprise)
+
+### Data Retention
+- User data retention policies documented
+- Deletion procedures in place
+- Right-to-deletion support (GDPR)
+- Audit log retention (7 years for compliance)
+
+### Audit Logging
+- All safety/classification events logged (`distressEvent` table)
+- Provider verification actions logged
+- Alert resolution tracking
+- **No PHI in logs** (only metadata)
+- Used for compliance reviews, security audits
+
+### Penetration Testing
+- **Status**: Scheduled pre-launch
+- **Scope**: Full platform + API endpoints
+- **Focus**: HIPAA compliance vulnerabilities
+
+## Cloud Migration Strategy
+
+### Phase 1: Containerization ✅ Complete
+- All services in Docker
+- No host dependencies
+- Portable to any container runtime
+
+### Phase 2: Cloud Preparation (In Progress)
+- **Documentation**: GCP setup guides, BAA migration path
+- **Architecture Review**: Security config, network topology
+- **Cost Analysis**: Cloud Run vs GKE vs Compute Engine
+
+### Phase 3: GCP Migration (Planned H2 2026)
+**Services**:
+- **Cloud Run**: Main app + distress classifier (auto-scaling, pay-per-use)
+- **Cloud SQL**: PostgreSQL with BAA, automated backups, point-in-time recovery
+- **Cloud Memorystore**: Redis (managed, high availability)
+- **Cloud Storage**: File uploads, backups
+- **Cloud CDN**: Static assets, global distribution
+- **Cloud Armor**: DDoS protection, WAF
+
+**Benefits**:
+- **BAA Coverage**: HIPAA-compliant infrastructure
+- **Auto-Scaling**: Handle traffic spikes
+- **Global Performance**: Multi-region deployment
+- **Managed Services**: Reduced operational burden
+- **Cost Efficiency**: Pay-per-use (vs fixed VPS cost)
+
+## Performance Optimizations
+
+### Application Level
+- **Redis Caching**: AI context (5min TTL)
+- **Lazy Loading**: Assessment migration (non-blocking)
+- **Query Pagination**: 50 alerts limit per query
+- **Embedding Search**: Limited to 1000 rows
+- **Component State Persistence**: Reduces re-computation
+- **Wellness Score History**: Capped at 12 snapshots
+
+### Database Level
+- **Indexes**: On frequently queried fields (user_id, provider_id, timestamps)
+- **Connection Pooling**: Managed by Drizzle
+- **Query Optimization**: N+1 prevention, join optimization
+
+### Infrastructure Level
+- **Docker Multi-Stage Builds**: Smaller images, faster deploys
+- **CDN** (Planned): Static asset caching
+- **HTTP/2**: Multiplexing, header compression
+- **Compression**: Gzip/Brotli for text responses
+
+## Backup & Disaster Recovery
+
+### Current (VPS)
+- **Database**: Dokploy automated backups (daily)
+- **Code**: Version-controlled in GitHub
+- **Configuration**: Stored in `.env.local` (backed up separately)
+
+### Future (GCP)
+- **Cloud SQL**: Automated backups, point-in-time recovery (7-35 day retention)
+- **Cloud Storage**: Versioning, lifecycle policies
+- **Multi-Region**: Disaster recovery across regions
+- **RTO**: Recovery Time Objective < 1 hour
+- **RPO**: Recovery Point Objective < 15 minutes
+
+## Monitoring & Observability
+
+### Current
+- **Docker Logs**: All container output logged
+- **Health Checks**: `/api/health`, `/api/health/ai` endpoints
+- **Dokploy UI**: Container status, resource usage
+
+### Planned
+- **Metabase**: Analytics dashboards (in development)
+- **Sentry** (Planned): Error tracking, performance monitoring
+- **Prometheus + Grafana** (Future): Metrics, alerting
+- **Uptime Monitoring** (Future): External health checks
